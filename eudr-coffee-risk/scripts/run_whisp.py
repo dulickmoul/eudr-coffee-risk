@@ -40,6 +40,20 @@ def parse_args(argv=None):
                    help="Whisp API key (or set WHISP_API_KEY).")
     p.add_argument("--out", default=os.path.join("out", "whisp"))
     p.add_argument("--harvest-year", type=int, default=None)
+    p.add_argument(
+        "--external-id-column",
+        default=None,
+        help="Input property holding your own plot id, echoed back by Whisp "
+             "into external_id (default: config.WHISP_EXTERNAL_ID_COLUMN).",
+    )
+    p.add_argument(
+        "--async", dest="run_async", action="store_true",
+        help="Force the async job path instead of letting Whisp decide.",
+    )
+    p.add_argument(
+        "--audit-trail", action="store_true",
+        help="Ask Whisp for the geometry audit trail column.",
+    )
     p.add_argument("--list-columns", action="store_true",
                    help="Print the raw Whisp column names and exit.")
     p.add_argument("--save-raw", action="store_true",
@@ -72,8 +86,17 @@ def main(argv=None):
         f"{plots.geometry_type_counts(plots_geojson)}"
     )
 
+    options = whisp.build_analysis_options(
+        external_id_column=args.external_id_column or config.WHISP_EXTERNAL_ID_COLUMN,
+        run_async=True if args.run_async else None,
+        geometry_audit_trail=args.audit_trail,
+    )
+    print(f"analysisOptions: {json.dumps(options)}")
+
     try:
-        raw = whisp.analyse(plots_geojson, api_key=args.api_key)
+        raw = whisp.analyse(
+            plots_geojson, api_key=args.api_key, analysis_options=options
+        )
     except whisp.WhispError as exc:
         sys.exit(f"Whisp request failed: {exc}")
 

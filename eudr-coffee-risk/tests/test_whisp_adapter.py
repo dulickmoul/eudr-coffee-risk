@@ -253,6 +253,56 @@ def test_heuristic_would_over_flag(mapped):
     check("with the verdict plot 2 is correctly low", with_verdict["2"], "low")
 
 
+def test_analysis_options():
+    """Field names must match the OpenAPI AnalysisOptionsInput exactly."""
+    opts = whisp.build_analysis_options()
+    check("externalIdColumn sent by default",
+          opts.get("externalIdColumn"), "plot_id")
+    check("unitType asks for hectares", opts.get("unitType"), "ha")
+    check("async omitted when unset", "async" in opts, False)
+    check("audit trail omitted when off", "geometryAuditTrail" in opts, False)
+
+    full = whisp.build_analysis_options(
+        external_id_column="farm_code", unit_type=None, run_async=True,
+        national_codes=["co"], geometry_audit_trail=True,
+    )
+    check("custom id column", full["externalIdColumn"], "farm_code")
+    check("unitType dropped when None", "unitType" in full, False)
+    check("async passed through", full["async"], True)
+    check("nationalCodes is a list", full["nationalCodes"], ["co"])
+    check("audit trail flag", full["geometryAuditTrail"], True)
+
+    none_opts = whisp.build_analysis_options(
+        external_id_column=None, unit_type=None
+    )
+    check("nothing sent when all disabled", none_opts, {})
+
+
+def test_external_id_preferred():
+    """Our id wins when Whisp echoes it back; otherwise fall back per row."""
+    df = pd.DataFrame([
+        {"plotId": 1, "external_id": "DL-001", "Area": 1.6},
+        {"plotId": 2, "external_id": "DL-002", "Area": 5.0},
+    ])
+    mapped = whisp.to_risk_frame(df)
+    check("external_id used as plot_id",
+          list(mapped["plot_id"]), ["DL-001", "DL-002"])
+    check("whisp plotId kept for traceability",
+          list(mapped["whisp_plot_id"]), ["1", "2"])
+
+
+def test_external_id_blank_falls_back():
+    """A blank external_id must not become the literal string 'null'."""
+    df = pd.DataFrame([
+        {"plotId": 1, "external_id": "null", "Area": 1.6},
+        {"plotId": 2, "external_id": "", "Area": 5.0},
+        {"plotId": 3, "external_id": "DL-003", "Area": 2.5},
+    ])
+    mapped = whisp.to_risk_frame(df)
+    check("blank rows fall back to plotId, mixed rows keep theirs",
+          list(mapped["plot_id"]), ["1", "2", "DL-003"])
+
+
 def test_tier_vocabulary():
     check("low", scoring.whisp_tier("low"), "low")
     check("high", scoring.whisp_tier("high"), "high")
@@ -278,6 +328,10 @@ def main():
     print("\n--- guards ---")
     test_payload_guards()
     test_missing_api_key()
+    print("\n--- analysis options and identity ---")
+    test_analysis_options()
+    test_external_id_preferred()
+    test_external_id_blank_falls_back()
     print("\n--- verdict vocabulary ---")
     test_tier_vocabulary()
     print("\n--- real Whisp response fixture ---")

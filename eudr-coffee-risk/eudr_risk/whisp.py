@@ -32,6 +32,8 @@ from .config import (
     EUDR_AREA_THRESHOLD_HA,
     WHISP_BASE_URL,
     WHISP_COMMODITY_COLUMN,
+    WHISP_EXTERNAL_ID_COLUMN,
+    WHISP_EXTERNAL_ID_FIELD,
     WHISP_GEOMETRY_LIMIT_ASYNC,
     WHISP_GEOMETRY_LIMIT_SYNC,
     WHISP_INDICATOR_AFTER_2020,
@@ -41,14 +43,50 @@ from .config import (
     WHISP_RADD_COLUMN,
     WHISP_RISK_COLUMN,
     WHISP_TIMEOUT_ASYNC_S,
+    WHISP_UNIT_TYPE,
 )
+
+BLANK_VALUES = {"", "nan", "none", "null", "<na>"}
+
+
+def _is_blank(value):
+    return value is None or str(value).strip().lower() in BLANK_VALUES
+
+
+def build_analysis_options(
+    external_id_column=WHISP_EXTERNAL_ID_COLUMN,
+    unit_type=WHISP_UNIT_TYPE,
+    run_async=None,
+    national_codes=None,
+    geometry_audit_trail=False,
+):
+    """Build the ``analysisOptions`` object Whisp accepts.
+
+    Field names are camelCase per the published OpenAPI schema
+    (``AnalysisOptionsInput``). ``externalIdColumn`` is the important one: it
+    names the property in your input GeoJSON that Whisp should echo back in
+    the ``external_id`` output column, which is what lets you join results to
+    your own records instead of trusting row order.
+    """
+    options = {}
+    if external_id_column:
+        options["externalIdColumn"] = external_id_column
+    if unit_type:
+        options["unitType"] = unit_type
+    if national_codes:
+        options["nationalCodes"] = list(national_codes)
+    if run_async is not None:
+        options["async"] = bool(run_async)
+    if geometry_audit_trail:
+        options["geometryAuditTrail"] = True
+    return options
 
 # Candidate source names for each field we care about, best first. Whisp
 # renames things between versions, so we look for any of these rather than
 # hard-coding one.
+# plot_id is deliberately absent: identity needs per-row fallback logic
+# (external_id, then Whisp's plotId), which a flat rename cannot express.
 COLUMN_ALIASES = {
-    # user_id is what Whisp's own example file uses, so it is a real case.
-    "plot_id": ["plot_id", "plotId", "PlotID", "user_id", "plot", "ID", "id", "geoid"],
     "area_ha": ["area_ha", "Area", "area"],
     "country": ["Country", "country", "ISO3", "iso3"],
     "unit": ["Unit", "unit"],
@@ -165,9 +203,15 @@ def submit_geojson(geojson, api_key=None, analysis_options=None,
     api_key = api_key or api_key_from_env()
     count = _check_payload(geojson)
 
-    body = {"geojson": geojson}
-    if analysis_options:
-        body["analysisOptions"] = analysis_options
+    # Per the OpenAPI schema, SubmitGeoJsonRequest is the FeatureCollection
+    # itself (additionalProperties: true) with analysisOptions alongside it,
+    # not the collection nested under a "geojson" key.
+    body = dict(geojson)
+    options = (
+        build_analysis_options() if analysis_options is None else analysis_options
+    )
+    if options:
+        body["analysisOptions"] = options
 
     timeout = 90 if count <= WHISP_GEOMETRY_LIMIT_SYNC else 30
     resp = requests.post(
@@ -321,7 +365,33 @@ def to_risk_frame(df, risk_column=WHISP_RISK_COLUMN, loss_columns=None,
             renames[source] = target
     out = out.rename(columns=renames)
 
-    if "plot_id" not in out.columns:
+    # Identity. Whisp numbers plots 1, 2, 3... in its own plotId and echoes
+    # your identifier into external_id only when analysisOptions.
+    # externalIdColumn was set. Prefer yours, fall back to Whisp's per row,
+    # and always keep Whisp's for traceability back to its result page.
+    internal = _first_present(out, ["plotId", "PlotID", "plot_id"])
+    external = _first_present(out, [WHISP_EXTERNAL_ID_FIELD, "externalId"])
+
+    if internal:
+        out["whisp_plot_id"] = out[internal].astype(str)
+    if external is not None:
+        resolved = [
+            str(ext) if not _is_blank(ext) else (
+                str(out[internal].iloc[i]) if internal else f"row-{i}"
+            )
+            for i, ext in enumerate(out[external])
+        ]
+        blanks = sum(1 for v in out[external] if _is_blank(v))
+        if blanks:
+            print(
+                f"NOTE: {blanks} of {len(out)} rows came back with no "
+                f"{WHISP_EXTERNAL_ID_FIELD}; used Whisp's plotId for those. "
+                "Set analysisOptions.externalIdColumn to carry your own ids."
+            )
+        out["plot_id"] = resolved
+    elif internal:
+        out["plot_id"] = out[internal].astype(str)
+    else:
         out["plot_id"] = [f"row-{i}" for i in range(len(out))]
     out["plot_id"] = out["plot_id"].astype(str)
 

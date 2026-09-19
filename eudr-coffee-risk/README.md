@@ -87,6 +87,31 @@ python scripts/run_whisp.py --plots data/plots_sample.geojson --out out/whisp
 Service limits (Whisp 3.0.0a17): 250 geometries return inline, up to 5,000 per
 job, request body up to 10 MB.
 
+#### Keeping your own plot ids
+
+Whisp numbers plots `1, 2, 3...` in its own `plotId` and does not carry your
+feature properties through, so matching results back to your records by row
+order is fragile. Avoid that by naming the property that holds your id:
+
+```bash
+python scripts/run_whisp.py --external-id-column plot_id
+```
+
+That is sent as `analysisOptions.externalIdColumn` and Whisp echoes the value
+into its `external_id` output column. The adapter prefers `external_id`,
+falls back to Whisp's `plotId` per row when it comes back blank, always keeps
+Whisp's id in `whisp_plot_id` for traceability, and prints how many rows fell
+back. Upstream has had trouble honouring this (whisp issue #257), hence the
+per-row fallback rather than trust.
+
+Other `analysisOptions` the API accepts: `unitType` (we request `ha`),
+`nationalCodes`, `async`, `geometryAuditTrail` (adds the `geo_original`
+column). Build them with `whisp.build_analysis_options()`.
+
+Two operational facts worth knowing: one token is one *job*, not one plot, so
+a multi-feature submission returns a single token covering every feature; and
+results are **ephemeral**, so persist the CSV or GeoJSON yourself.
+
 There is also an official **Whisp QGIS plugin** (FAO, MIT) if you want a GUI:
 install it from inside QGIS via *Manage and install Plugins... → Install from
 ZIP*. It needs QGIS 3.40+ and calls the same API. Do not vendor it into this

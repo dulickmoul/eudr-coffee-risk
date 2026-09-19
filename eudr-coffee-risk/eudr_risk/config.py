@@ -149,3 +149,15 @@ WHISP_INDICATOR_AFTER_2020 = "Ind_04_disturbance_after_2020"
 
 # Coffee presence, useful for sanity-checking that a plot really is coffee.
 WHISP_COMMODITY_COLUMN = "Coffee_FDaP"
+
+# Whisp assigns its own sequential plotId (1, 2, 3...) and does not carry your
+# feature properties through. Name the property holding your own id here and
+# it is sent as analysisOptions.externalIdColumn; Whisp then fills the
+# external_id output column, giving a real join key instead of relying on row
+# order. Upstream has had trouble with this (whisp issue #257), so the adapter
+# falls back to Whisp's internal plotId whenever external_id comes back blank.
+WHISP_EXTERNAL_ID_COLUMN = "plot_id"   # property name in YOUR input GeoJSON
+WHISP_EXTERNAL_ID_FIELD = "external_id"  # column name in Whisp's OUTPUT
+
+# analysisOptions.unitType: ask for hectares explicitly rather than hoping.
+WHISP_UNIT_TYPE = "ha"
