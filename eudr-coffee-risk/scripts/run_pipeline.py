@@ -77,7 +77,7 @@ def main(argv=None):
     import ee
     import geemap
 
-    from eudr_risk import config, dds, pipeline, scoring
+    from eudr_risk import config, dds, pipeline, plots, scoring
 
     try:
         ee.Initialize(project=args.project)
@@ -87,17 +87,14 @@ def main(argv=None):
             "Run 'earthengine authenticate' once, then retry."
         )
 
-    with open(args.plots, encoding="utf-8") as fh:
-        plots_geojson = json.load(fh)
-
-    geometry_by_id = {}
-    for feat in plots_geojson.get("features", []):
-        pid = (feat.get("properties") or {}).get("plot_id")
-        if pid is None:
-            sys.exit("Every feature needs a 'plot_id' property.")
-        geometry_by_id[pid] = feat.get("geometry")
-
-    print(f"Loaded {len(geometry_by_id)} plots from {args.plots}")
+    try:
+        plots_geojson, geometry_by_id = plots.load_plots(args.plots)
+    except plots.PlotLoadError as exc:
+        sys.exit(str(exc))
+    print(
+        f"Loaded {len(geometry_by_id)} plots from {args.plots} "
+        f"{plots.geometry_type_counts(plots_geojson)}"
+    )
 
     fc = geemap.geojson_to_ee(plots_geojson)
     legality_fc = ee.FeatureCollection(args.legality) if args.legality else None

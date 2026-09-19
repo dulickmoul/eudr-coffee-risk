@@ -42,7 +42,8 @@ from .config import (
 # renames things between versions, so we look for any of these rather than
 # hard-coding one.
 COLUMN_ALIASES = {
-    "plot_id": ["plot_id", "plotId", "PlotID", "plot", "ID", "id", "geoid"],
+    # user_id is what Whisp's own example file uses, so it is a real case.
+    "plot_id": ["plot_id", "plotId", "PlotID", "user_id", "plot", "ID", "id", "geoid"],
     "area_ha": ["area_ha", "Area", "area"],
     "country": ["Country", "country", "ISO3", "iso3"],
     "unit": ["Unit", "unit"],

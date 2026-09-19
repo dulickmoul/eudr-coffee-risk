@@ -53,7 +53,7 @@ def parse_args(argv=None):
 
 def main(argv=None):
     args = parse_args(argv)
-    from eudr_risk import config, dds, scoring, whisp
+    from eudr_risk import config, dds, plots, scoring, whisp
 
     if args.check:
         print("config:", json.dumps(whisp.get_config(), indent=2))
@@ -63,16 +63,14 @@ def main(argv=None):
             print("health check failed:", exc)
         return 0
 
-    with open(args.plots, encoding="utf-8") as fh:
-        plots_geojson = json.load(fh)
-
-    geometry_by_id = {}
-    for feat in plots_geojson.get("features", []):
-        pid = (feat.get("properties") or {}).get("plot_id")
-        if pid is None:
-            sys.exit("Every feature needs a 'plot_id' property.")
-        geometry_by_id[str(pid)] = feat.get("geometry")
-    print(f"Loaded {len(geometry_by_id)} plots from {args.plots}")
+    try:
+        plots_geojson, geometry_by_id = plots.load_plots(args.plots)
+    except plots.PlotLoadError as exc:
+        sys.exit(str(exc))
+    print(
+        f"Loaded {len(geometry_by_id)} plots from {args.plots} "
+        f"{plots.geometry_type_counts(plots_geojson)}"
+    )
 
     try:
         raw = whisp.analyse(plots_geojson, api_key=args.api_key)
