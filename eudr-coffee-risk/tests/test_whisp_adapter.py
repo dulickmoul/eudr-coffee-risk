@@ -27,6 +27,12 @@ FAILS = []
 # config.py are facts rather than guesses.
 FIXTURE = os.path.join(HERE, "fixtures", "whisp_result_sample.csv")
 
+# Real Whisp rows from probe plots on the Lam Dong forest frontier, found by
+# grid search. Contains the cases that pin both failure modes: plots Whisp
+# calls low despite heavy post-2020 clearing, and plots with loss that is
+# genuinely not EUDR-relevant.
+FRONTIER = os.path.join(HERE, "fixtures", "whisp_frontier_sample.csv")
+
 
 def check(label, got, want):
     ok = got == want
@@ -337,6 +343,59 @@ def test_external_id_blank_falls_back():
           list(mapped["plot_id"]), ["1", "2", "DL-003"])
 
 
+def test_severity_helpers():
+    check("worst of two", scoring.most_severe("low", "high"), "high")
+    check("standard beats low", scoring.most_severe("low", "standard"), "standard")
+    check("high beats standard", scoring.most_severe("standard", "high"), "high")
+    check("None ignored", scoring.most_severe(None, "standard"), "standard")
+    check("all None -> low", scoring.most_severe(None, None), "low")
+    check("unknown counts as standard",
+          scoring.most_severe("low", "weird"), "weird")
+
+
+def test_frontier_fixture():
+    """Both failure modes, pinned against real forest-frontier data.
+
+    Deferring to Whisp's verdict alone under-flags; trusting our own
+    hectares alone over-flags. assign_tier must take the worse of the two.
+    """
+    if not os.path.exists(FRONTIER):
+        print(f"SKIP  frontier fixture missing: {FRONTIER}")
+        return
+
+    raw = pd.read_csv(FRONTIER)
+    scored = scoring.score_dataframe(whisp.to_risk_frame(raw))
+    by_id = scored.set_index("plot_id")
+
+    # Under-flagging case: heavy clearing, radar alerts, Whisp's own Ind_04
+    # says yes, but risk_pcrop came back low.
+    r7c3 = by_id.loc["TADUNG-r7c3"]
+    check("r7c3 verdict really is low", r7c3["whisp_risk"], "low")
+    check("r7c3 disturbance confirmed",
+          bool(r7c3["whisp_disturbance_after_2020"]), True)
+    check("r7c3 lost over 40% of the plot", round(r7c3["loss_pct"], 0) > 40, True)
+    check("r7c3 must NOT be low", r7c3["risk_tier"], "high")
+
+    # Whisp agreeing with us stays high.
+    check("verdict high stays high", by_id.loc["SONDIEN-r6c4"]["risk_tier"], "high")
+
+    # Over-flagging guard: real loss hectares, but Ind_04 says it was not
+    # post-cutoff forest disturbance, so it must not raise the tier.
+    r7c5 = by_id.loc["TADUNG-r7c5"]
+    check("r7c5 has loss on the books", r7c5["loss_ha"] > 0, True)
+    check("r7c5 disturbance not confirmed",
+          bool(r7c5["whisp_disturbance_after_2020"]), False)
+    check("r7c5 stays low", r7c5["risk_tier"], "low")
+    check("r7c5 score stays zero", r7c5["risk_score"], 0.0)
+
+    # And the counterfactual: blind deference loses the dangerous plot.
+    blind = whisp.to_risk_frame(raw).copy()
+    blind_tier = scoring.whisp_tier(
+        blind.set_index("plot_id").loc["TADUNG-r7c3", "whisp_risk"]
+    )
+    check("blind deference would have said low", blind_tier, "low")
+
+
 def test_tier_vocabulary():
     check("low", scoring.whisp_tier("low"), "low")
     check("high", scoring.whisp_tier("high"), "high")
@@ -370,9 +429,13 @@ def main():
     test_external_id_blank_falls_back()
     print("\n--- verdict vocabulary ---")
     test_tier_vocabulary()
+    print("\n--- severity combination ---")
+    test_severity_helpers()
     print("\n--- real Whisp response fixture ---")
     mapped = test_real_fixture()
     test_heuristic_would_over_flag(mapped)
+    print("\n--- forest frontier fixture (both failure modes) ---")
+    test_frontier_fixture()
 
     print("\n" + ("ALL PASS" if not FAILS else f"{len(FAILS)} FAILURES: {FAILS}"))
     return 1 if FAILS else 0

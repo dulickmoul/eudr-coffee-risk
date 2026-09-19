@@ -228,21 +228,31 @@ Rule-based and deliberately boring (see `scoring.assign_tier`):
 - **standard** — any post-cutoff loss or alert, or > 25% forest remaining within 1 km
 - **low** — no remote-sensing evidence of post-2020 deforestation
 
-**Whisp's own verdict overrides these rules whenever it is present**, because
-raw loss hectares are the wrong question. EUDR asks about loss on land that
-was *forest at the cutoff*; Whisp gates on exactly that, our arithmetic does
-not.
+**Neither Whisp's verdict nor our own arithmetic may be trusted alone**, and
+the two failure modes point in opposite directions. `assign_tier` takes the
+**more severe** of the two. Both cases below are real Lâm Đồng data, and both
+are pinned by tests.
 
-A real case from the Di Linh sample makes the point. Plot DL-002 is a 5.05 ha
-coffee plot with 0.076 ha of GFC tree-cover loss after 2020, which is 1.51% of
-the plot, comfortably over the 0.5% "high" threshold. But `EUFO_2020`,
-`ForTy_forest_2020` and `GFT_primary` are all zero: that ground was already
-tree crop in 2020, not forest. Whisp returns `risk_pcrop = low` and
-`Ind_04_disturbance_after_2020 = no`, and it is right. Trusting our own
-threshold would have sent a field team to a compliant farm.
+*Our arithmetic alone over-flags.* Plot `DL-002` is 5.05 ha of coffee with
+0.076 ha of post-2020 GFC loss, 1.51% of the plot, comfortably over the 0.5%
+"high" threshold. But `EUFO_2020`, `ForTy_forest_2020` and `GFT_primary` are
+all zero: that ground was already tree crop in 2020, not forest. Whisp returns
+`risk_pcrop = low` and `Ind_04_disturbance_after_2020 = no`, and it is right.
+Acting on our threshold would have sent a field team to a compliant farm.
 
-The Earth Engine backend gets the same gating from `strict_jrc=True`, which
-intersects Hansen loss with the JRC 2020 forest baseline.
+*Whisp's verdict alone under-flags, which is worse.* Probe `TADUNG-r7c3` lost
+2.16 ha of 4.82 ha after the cutoff — 44.8% — with RADD radar alerts and
+Whisp's own `Ind_04` set to **yes**, yet `risk_pcrop` still came back `low`.
+An earlier version of this code deferred to that verdict and tiered the plot
+low. Across a 243-probe grid on the forest frontier, blind deference found
+**2** high-risk plots; taking the worse of the two sources finds **18**.
+
+So: post-cutoff loss only counts when `Ind_04` confirms it was forest-gated
+disturbance, a verdict can add severity but never subtract it from confirmed
+disturbance, and legality overrides both because Whisp cannot see land tenure.
+
+The Earth Engine backend gets the same forest gating from `strict_jrc=True`,
+which intersects Hansen loss with the JRC 2020 forest baseline.
 
 `risk_score` (0–100) is a weighted sum used only to *order* the worklist
 within a tier. Weights live in `config.DEFAULT_WEIGHTS`. Change them if you

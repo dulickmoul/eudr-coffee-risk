@@ -1,0 +1,205 @@
+{
+  "type": "FeatureCollection",
+  "name": "positive_control_lamdong",
+  "note": "Probe plots that Whisp reports as having post-2020 forest loss. Found by grid search, not hand-picked.",
+  "features": [
+    {
+      "type": "Feature",
+      "properties": {
+        "plot_id": "TADUNG-r4c0"
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              107.852,
+              11.9
+            ],
+            [
+              107.854,
+              11.9
+            ],
+            [
+              107.854,
+              11.902000000000001
+            ],
+            [
+              107.852,
+              11.902000000000001
+            ],
+            [
+              107.852,
+              11.9
+            ]
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "plot_id": "TADUNG-r7c1"
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              107.864,
+              11.936
+            ],
+            [
+              107.866,
+              11.936
+            ],
+            [
+              107.866,
+              11.938
+            ],
+            [
+              107.864,
+              11.938
+            ],
+            [
+              107.864,
+              11.936
+            ]
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "plot_id": "TADUNG-r7c3"
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              107.888,
+              11.936
+            ],
+            [
+              107.89,
+              11.936
+            ],
+            [
+              107.89,
+              11.938
+            ],
+            [
+              107.888,
+              11.938
+            ],
+            [
+              107.888,
+              11.936
+            ]
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "plot_id": "TADUNG-r7c4"
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              107.9,
+              11.936
+            ],
+            [
+              107.902,
+              11.936
+            ],
+            [
+              107.902,
+              11.938
+            ],
+            [
+              107.9,
+              11.938
+            ],
+            [
+              107.9,
+              11.936
+            ]
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "plot_id": "SONDIEN-r6c4"
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              108.05,
+              11.494
+            ],
+            [
+              108.05199999999999,
+              11.494
+            ],
+            [
+              108.05199999999999,
+              11.496
+            ],
+            [
+              108.05,
+              11.496
+            ],
+            [
+              108.05,
+              11.494
+            ]
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "plot_id": "SONDIEN-r8c2"
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              108.026,
+              11.518
+            ],
+            [
+              108.02799999999999,
+              11.518
+            ],
+            [
+              108.02799999999999,
+              11.520000000000001
+            ],
+            [
+              108.026,
+              11.520000000000001
+            ],
+            [
+              108.026,
+              11.518
+            ]
+          ]
+        ]
+      }
+    }
+  ]
+}

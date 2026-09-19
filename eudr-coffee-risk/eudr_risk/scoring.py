@@ -62,41 +62,66 @@ def _has_verdict(value):
     )
 
 
-def assign_tier(row):
-    """Rule-based tier. Whisp's own verdict wins whenever it is present.
+TIER_SEVERITY = {"low": 0, "standard": 1, "high": 2}
 
-    Why defer: our heuristic reads raw post-cutoff loss hectares, but EUDR
-    only cares about loss on land that was *forest at the cutoff*. Whisp gates
-    on exactly that, so trusting our own arithmetic over its verdict produces
-    false positives. A real example from the Di Linh sample: a 5.05 ha coffee
-    plot with 0.076 ha of GFC loss after 2020 scores 1.5% here, which our
-    thresholds would call "high", while Whisp correctly returns "low" because
-    that ground was already tree crop, not forest, in 2020.
 
-    In the Earth Engine backend the equivalent gating is ``strict_jrc=True``
-    in :func:`eudr_risk.pipeline.extract_features`.
+def most_severe(*tiers):
+    """The worst of several tiers. Unknown labels count as standard."""
+    present = [t for t in tiers if t]
+    if not present:
+        return "low"
+    return max(present, key=lambda t: TIER_SEVERITY.get(t, 1))
+
+
+def evidence_tier(row):
+    """Tier from our own measurements alone.
+
+    Raw post-cutoff loss only counts when the land was forest at the cutoff.
+    When Whisp's forest-gated indicator says there was no post-cutoff
+    disturbance, the hectares are real but not EUDR-relevant, so they must
+    not raise the tier. The Earth Engine backend gets the same gating from
+    ``strict_jrc=True`` in :func:`eudr_risk.pipeline.extract_features`.
     """
-    verdict = row.get("whisp_risk")
-    if _has_verdict(verdict):
-        tier = whisp_tier(verdict)
-        # Legality is ours to judge, not Whisp's: it does not see land tenure.
-        if bool(row.get("in_protected_area")) or bool(row.get("in_restricted_forest")):
+    gated = (
+        "whisp_disturbance_after_2020" in row
+        and not bool(row.get("whisp_disturbance_after_2020"))
+    )
+    if not gated:
+        if row["loss_pct"] > HIGH_LOSS_PCT or row["radd_alert_ha"] > HIGH_RADD_HA:
             return "high"
-        return tier
-
-    has_loss = row["loss_pct"] > 0
-    has_alert = row["radd_alert_ha"] > 0
-    restricted = bool(row["in_protected_area"]) or bool(row["in_restricted_forest"])
-
-    if restricted:
-        return "high"
-    if row["loss_pct"] > HIGH_LOSS_PCT or row["radd_alert_ha"] > HIGH_RADD_HA:
-        return "high"
-    if has_loss or has_alert:
-        return "standard"
+        if row["loss_pct"] > 0 or row["radd_alert_ha"] > 0:
+            return "standard"
     if row["forest_frac_1km"] > WATCH_FOREST_FRAC:
         return "standard"
     return "low"
+
+
+def assign_tier(row):
+    """Take the more severe of Whisp's verdict and our own evidence.
+
+    Neither source may be trusted alone, and the two failure modes point in
+    opposite directions. Both are real cases from Lam Dong:
+
+    * Trusting our arithmetic alone **over-flags**. Plot DL-002, 5.05 ha of
+      coffee with 0.076 ha of post-2020 GFC loss, reads 1.51% and would be
+      called high, but every forest-2020 layer is zero: it was already tree
+      crop. Whisp says low, correctly.
+    * Trusting Whisp's verdict alone **under-flags**, which is worse. Probe
+      TADUNG-r7c3 lost 2.16 ha of 4.82 ha after 2020, 44.8%, with RADD radar
+      alerts and Whisp's own Ind_04 indicator set to yes, yet ``risk_pcrop``
+      came back low. Deferring would have hidden a plot that plainly needs a
+      visit.
+
+    So combine them and keep the worst. A verdict can add severity but never
+    subtract it from confirmed disturbance, and legality overrides both
+    because Whisp cannot see land tenure.
+    """
+    if bool(row.get("in_protected_area")) or bool(row.get("in_restricted_forest")):
+        return "high"
+
+    verdict = row.get("whisp_risk")
+    from_verdict = whisp_tier(verdict) if _has_verdict(verdict) else None
+    return most_severe(from_verdict, evidence_tier(row))
 
 
 def conclusion(row):
