@@ -45,6 +45,7 @@ DDS_PROPERTY_ORDER = [
     "risk_score",
     "risk_tier",
     "deforestation_flag",
+    "whisp_risk",
     "dds_conclusion",
 ]
 
@@ -90,6 +91,11 @@ def build_dds(df, geometry_by_id, operator=None, harvest_year=None):
             "deforestation_flag": bool(row.get("deforestation_flag", False)),
             "dds_conclusion": row.get("dds_conclusion"),
         }
+        # Present only when the Whisp backend was used. Its own EUDR-oriented
+        # verdict is the authoritative one; keep it verbatim next to ours.
+        whisp_risk = row.get("whisp_risk")
+        if whisp_risk is not None and str(whisp_risk) != "nan":
+            props["whisp_risk"] = str(whisp_risk)
         ordered = {k: props[k] for k in DDS_PROPERTY_ORDER if k in props}
         features.append(
             {

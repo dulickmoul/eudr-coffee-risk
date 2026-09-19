@@ -40,26 +40,83 @@ Two things worth being precise about, because they are easy to get wrong:
 
 ---
 
-## Quickstart
+## Two data backends, one output
 
-You need a free (non-commercial) Earth Engine account and a Cloud project:
-sign up at <https://earthengine.google.com>.
+The geospatial analysis can come from either source. Scoring and the export
+bundle are identical downstream, so you can start with Whisp and move to
+Earth Engine later without touching anything else.
+
+| | **A. Whisp (recommended to start)** | **B. Your own Earth Engine** |
+|---|---|---|
+| Needs | An API key | A registered GEE Cloud project |
+| Analysis runs | On FAO's servers | In your EE project |
+| Method | "Convergence of evidence" over many open datasets | JRC GFC2020 + Hansen + RADD, computed here |
+| Good for | Getting answers today; the sector-standard tool | Full control, custom layers, your own weights |
+| Entry point | `scripts/run_whisp.py` | `scripts/run_pipeline.py` |
+
+Note: the `openforis-whisp` PyPI package is **not** a way around Earth Engine,
+it needs a registered GEE project too. Only the hosted API avoids that.
+
+### A. Whisp quickstart
+
+Get a key from <https://whisp.openforis.org>, then:
+
+```bash
+pip install pandas requests
+```
+```bash
+set WHISP_API_KEY=your-key
+```
+```bash
+python scripts/run_whisp.py --check
+```
+
+`--check` prints the live service limits and needs no key. Then, on any new
+dataset, look at the real column names before trusting numbers:
+
+```bash
+python scripts/run_whisp.py --list-columns
+```
+
+Put the post-2020 loss columns you see into `config.WHISP_LOSS_COLUMNS`, then:
+
+```bash
+python scripts/run_whisp.py --plots data/plots_sample.geojson --out out/whisp
+```
+
+Service limits (Whisp 3.0.0a17): 250 geometries return inline, up to 5,000 per
+job, request body up to 10 MB.
+
+There is also an official **Whisp QGIS plugin** (FAO, MIT) if you want a GUI:
+install it from inside QGIS via *Manage and install Plugins... → Install from
+ZIP*. It needs QGIS 3.40+ and calls the same API. Do not vendor it into this
+repo.
+
+### B. Earth Engine quickstart
+
+Free noncommercial access is limited to eligible organisations (nonprofits,
+academic and research institutions) and now carries monthly compute quotas;
+commercial use has a monthly platform fee. Sign up at
+<https://earthengine.google.com>.
 
 ```bash
 pip install -r requirements.txt
-earthengine authenticate          # once per machine
-export GEE_PROJECT=my-gee-project # Windows: set GEE_PROJECT=...
+```
+```bash
+earthengine authenticate
+```
+```bash
+set GEE_PROJECT=my-gee-project
+```
+```bash
 python scripts/run_pipeline.py
 ```
 
-That runs the three synthetic Di Linh plots and writes `out/`. To use real data:
+That runs the three synthetic Di Linh plots and writes `out/`. With real data
+and a legality layer:
 
 ```bash
-python scripts/run_pipeline.py \
-  --plots data/real/lamdong_plots.geojson \
-  --harvest-year 2026 \
-  --legality projects/my-gee-project/assets/lamdong_protection_forest \
-  --out out/2026
+python scripts/run_pipeline.py --plots data/real/lamdong_plots.geojson --harvest-year 2026 --legality projects/my-gee-project/assets/lamdong_protection_forest --out out/2026
 ```
 
 Prefer a map? Open [`notebooks/phase2_risk.ipynb`](notebooks/phase2_risk.ipynb)
@@ -75,12 +132,23 @@ Engine credentials and no network:
 
 ```bash
 pip install pandas
+```
+```bash
 python tests/test_scoring.py
 ```
+```bash
+python tests/test_whisp_adapter.py
+```
 
-40 checks covering the tier rules, boolean coercion from `ee_to_df`, missing
-columns, empty input, and the whole export bundle. Run it before you touch
-`config.DEFAULT_WEIGHTS` or the tier thresholds.
+73 checks total, no network and no credentials:
+
+- `test_scoring.py` (40) — tier rules, boolean coercion from `ee_to_df`,
+  missing columns, empty input, the whole export bundle.
+- `test_whisp_adapter.py` (33) — response-envelope parsing, column mapping,
+  payload guards, and that the adapter **never fabricates** a `loss_pct` or
+  `radd_alert_ha` Whisp did not return.
+
+Run both before you touch `config.DEFAULT_WEIGHTS` or the tier thresholds.
 
 ---
 
@@ -111,19 +179,23 @@ down why: this feeds a compliance decision.
 
 ```
 eudr_risk/
-  config.py     EUDR constants, asset ids, weights  <- tune here
+  config.py     EUDR constants, asset ids, weights, Whisp limits  <- tune here
   geometry.py   area + the >4 ha polygon rule
-  forest.py     JRC 2020 baseline, Hansen post-cutoff loss
-  alerts.py     RADD radar alerts (near-real-time)
-  legality.py   WDPA + hook for Vietnam forest zoning
-  pipeline.py   zonal stats -> one row per plot
+  forest.py     JRC 2020 baseline, Hansen post-cutoff loss     [backend B]
+  alerts.py     RADD radar alerts (near-real-time)             [backend B]
+  legality.py   WDPA + hook for Vietnam forest zoning          [backend B]
+  pipeline.py   Earth Engine zonal stats -> one row per plot   [backend B]
+  whisp.py      Whisp API client + column adapter              [backend A]
   scoring.py    score, tier, draft conclusion (pandas, no EE)
   dds.py        CSV / DDS GeoJSON / summary / field checklist
 notebooks/
   phase1_mvp.ipynb    original MVP: Hansen loss on a map
-  phase2_risk.ipynb   full pipeline + map + export
-scripts/run_pipeline.py   CLI
-data/plots_sample.geojson synthetic demo plots
+  phase2_risk.ipynb   full Earth Engine pipeline + map + export
+scripts/
+  run_whisp.py        CLI, Whisp backend (no Earth Engine)
+  run_pipeline.py     CLI, Earth Engine backend
+tests/                73 checks, no network or credentials
+data/plots_sample.geojson  synthetic demo plots
 ```
 
 Earth Engine work is confined to `pipeline.py` and the layer modules; scoring
@@ -138,6 +210,7 @@ statistics.
 | Tree-cover loss | `UMD/hansen/global_forest_change_2024_v1_12` | Annual; `lossyear` is years since 2000 |
 | NRT alerts | `projects/radar-wur/raddalert/v1` | Sentinel-1 radar, 10 m; filter `layer`/`geography` |
 | Protected areas | `WCMC/WDPA/current/polygons` | Legality proxy only |
+| Whisp API | `https://whisp.openforis.org/api` | Backend A. Many layers combined server-side; coffee risk column is `Risk_PCrop` |
 
 Asset versions move. `notebooks/phase2_risk.ipynb` Step 0 prints the live band
 names so you can catch a rename before it corrupts a run. RADD band naming in

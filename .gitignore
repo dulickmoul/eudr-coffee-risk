@@ -26,6 +26,12 @@ data/real/
 data/*_plots.geojson
 !data/plots_sample.geojson
 
+# Third-party tools downloaded for local use, not ours to vendor.
+# The Whisp QGIS plugin (FAO, MIT) installs from inside QGIS via
+# "Manage and install Plugins..." -> "Install from ZIP", not from this repo.
+whisp_plugin/
+*.zip
+
 # OS noise
 .DS_Store
 Thumbs.db

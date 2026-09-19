@@ -1,7 +1,13 @@
-# Core: Earth Engine client + notebook mapping + dataframes.
-earthengine-api>=1.1.0
-geemap>=0.32.0
+# Shared: scoring and the export bundle need only pandas.
 pandas>=2.0
 
-# Only needed if you read/convert local shapefiles or GeoPackages.
+# --- Backend A: Whisp hosted API (no Earth Engine project needed) ---
+requests>=2.31
+
+# --- Backend B: your own Earth Engine analysis ---
+# Requires a registered GEE Cloud project. Skip these if you only use Whisp.
+earthengine-api>=1.1.0
+geemap>=0.32.0
+
+# Only needed to read local shapefiles or GeoPackages.
 # geopandas>=0.14

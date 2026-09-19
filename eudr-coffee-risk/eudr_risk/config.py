@@ -83,3 +83,33 @@ SATURATE_RADD_HA = 0.10     # 0.1 ha of alerts saturates the alert term
 HIGH_LOSS_PCT = 0.5
 HIGH_RADD_HA = 0.05
 WATCH_FOREST_FRAC = 0.25
+
+# --- Whisp (Open Foris / FAO) hosted API ----------------------------------
+# Second data backend. Runs the analysis server-side using FAO's "convergence
+# of evidence" approach, so it needs only an API key rather than your own
+# registered Earth Engine project.
+#
+# Note: the `openforis-whisp` PyPI package is NOT an Earth Engine workaround,
+# it requires a registered GEE project too. Only the hosted API avoids that.
+#
+# Limits below were read from GET https://whisp.openforis.org/api/config
+# (Whisp 3.0.0a17, September 2026). Re-check with whisp.get_config().
+WHISP_BASE_URL = "https://whisp.openforis.org/api"
+WHISP_GEOMETRY_LIMIT_SYNC = 250    # at or below this, results come back inline
+WHISP_GEOMETRY_LIMIT_ASYNC = 5000  # hard ceiling for one job
+WHISP_TIMEOUT_SYNC_S = 60
+WHISP_TIMEOUT_ASYNC_S = 600
+WHISP_MAX_BODY_KB = 10240
+WHISP_VERSION_SEEN = "3.0.0a17"
+
+# Whisp's own risk column depends on commodity. Coffee is a perennial crop,
+# so the relevant column is Risk_PCrop. Others: Risk_ACrop (annual crops),
+# Risk_Timber, Risk_Livestock (coming).
+WHISP_RISK_COLUMN = "Risk_PCrop"
+
+# Whisp returns dozens of columns and the set changes between versions.
+# Run `python scripts/run_whisp.py --list-columns` once against your own data,
+# then list here the post-2020 loss columns to sum into `loss_pct`.
+# Deliberately empty: guessing column names would silently produce wrong
+# risk numbers, which is worse than producing none.
+WHISP_LOSS_COLUMNS = []
