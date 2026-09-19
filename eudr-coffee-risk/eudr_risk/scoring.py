@@ -97,31 +97,71 @@ def evidence_tier(row):
 
 
 def assign_tier(row):
-    """Take the more severe of Whisp's verdict and our own evidence.
+    """Whisp's verdict governs when present; our evidence is the fallback.
 
-    Neither source may be trusted alone, and the two failure modes point in
-    opposite directions. Both are real cases from Lam Dong:
+    This deference is not laziness, it is the conclusion of getting it wrong
+    twice on real Lam Dong data.
 
-    * Trusting our arithmetic alone **over-flags**. Plot DL-002, 5.05 ha of
-      coffee with 0.076 ha of post-2020 GFC loss, reads 1.51% and would be
-      called high, but every forest-2020 layer is zero: it was already tree
-      crop. Whisp says low, correctly.
-    * Trusting Whisp's verdict alone **under-flags**, which is worse. Probe
-      TADUNG-r7c3 lost 2.16 ha of 4.82 ha after 2020, 44.8%, with RADD radar
-      alerts and Whisp's own Ind_04 indicator set to yes, yet ``risk_pcrop``
-      came back low. Deferring would have hidden a plot that plainly needs a
-      visit.
+    Our raw hectares cannot answer the EUDR question. Whisp's decision tree
+    can, because it combines forest-at-2020, commodity-at-2020 and
+    disturbance on both sides of the cutoff (see the tree quoted in
+    :mod:`eudr_risk.config`). Two cases show why the difference matters:
 
-    So combine them and keep the worst. A verdict can add severity but never
-    subtract it from confirmed disturbance, and legality overrides both
-    because Whisp cannot see land tenure.
+    * Plot ``DL-002``: 1.51% post-2020 loss on land that was already tree
+      crop in 2020. Our threshold said high; Whisp said low and was right.
+    * Probe ``TADUNG-r7c3``: 44.8% post-2020 loss, with radar alerts, yet
+      Whisp said low. It looks like an under-flag until you read
+      ``TMF_def_before_2020 = 4.73`` of 4.82 ha: the plot was 98% cleared
+      *before* the cutoff, so the later clearing is replanting on converted
+      land, not deforestation. Whisp was right again. Its ``risk_acrop`` for
+      the same plot is high, because the pre-cutoff path is perennial-only.
+
+    An earlier version of this function took the more severe of the two and
+    turned that second case into a false positive. Overriding a documented
+    methodology with a cruder heuristic makes results worse, not safer.
+
+    Legality still overrides, because Whisp cannot see land tenure. Anything
+    the verdict does not explain is surfaced in ``verdict_context`` rather
+    than silently changing the tier.
     """
     if bool(row.get("in_protected_area")) or bool(row.get("in_restricted_forest")):
         return "high"
 
     verdict = row.get("whisp_risk")
-    from_verdict = whisp_tier(verdict) if _has_verdict(verdict) else None
-    return most_severe(from_verdict, evidence_tier(row))
+    if _has_verdict(verdict):
+        return whisp_tier(verdict)
+    return evidence_tier(row)
+
+
+def verdict_context(row):
+    """Explain a verdict that the raw numbers seem to contradict.
+
+    Nothing is hidden and nothing is overridden: a reviewer sees both the
+    verdict and the evidence that looks inconsistent with it, plus the reason
+    Whisp's tree reaches its conclusion.
+    """
+    verdict = row.get("whisp_risk")
+    if not _has_verdict(verdict):
+        return ""
+
+    notes = []
+    loss_pct = float(row.get("loss_pct") or 0)
+    if verdict == "low" and loss_pct > 1:
+        reasons = []
+        if bool(row.get("whisp_disturbance_before_2020")):
+            reasons.append("disturbance before 2020 implies pre-cutoff establishment")
+        if bool(row.get("whisp_commodity_2020")):
+            reasons.append("commodity already mapped at end-2020")
+        if "whisp_treecover_2020" in row and not bool(row.get("whisp_treecover_2020")):
+            reasons.append("no tree cover at end-2020")
+        why = "; ".join(reasons) or "see Whisp indicators"
+        notes.append(f"low verdict despite {loss_pct:.1f}% post-2020 loss ({why})")
+
+    other = row.get("whisp_risk_acrop")
+    if _has_verdict(other) and other != verdict:
+        notes.append(f"risk_acrop disagrees ({other})")
+
+    return " | ".join(notes)
 
 
 def conclusion(row):
@@ -173,6 +213,7 @@ def score_dataframe(df, weights=None):
     else:
         d["deforestation_flag"] = (d["loss_pct"] > 0) | (d["radd_alert_ha"] > 0)
     d["risk_tier"] = d.apply(assign_tier, axis=1)
+    d["verdict_context"] = d.apply(verdict_context, axis=1)
     d["dds_conclusion"] = d.apply(conclusion, axis=1)
     d["country_eudr_risk"] = COUNTRY_EUDR_RISK
 

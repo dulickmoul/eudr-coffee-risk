@@ -42,6 +42,9 @@ from .config import (
     WHISP_GEOMETRY_LIMIT_ASYNC,
     WHISP_GEOMETRY_LIMIT_SYNC,
     WHISP_INDICATOR_AFTER_2020,
+    WHISP_INDICATOR_BEFORE_2020,
+    WHISP_INDICATOR_COMMODITIES_2020,
+    WHISP_INDICATOR_TREECOVER_2020,
     WHISP_LOSS_AGGREGATION,
     WHISP_LOSS_COLUMNS,
     WHISP_MAX_BODY_KB,
@@ -460,10 +463,29 @@ def to_risk_frame(df, risk_column=WHISP_RISK_COLUMN, loss_columns=None,
         )
         out["whisp_risk"] = None
 
-    # Whisp's yes/no post-cutoff disturbance indicator.
-    source_ind = _first_present(out, [WHISP_INDICATOR_AFTER_2020])
-    if source_ind:
-        out["whisp_disturbance_after_2020"] = _yes_no_to_bool(out[source_ind])
+    # Whisp's yes/no indicators. All of these feed its decision tree, so keep
+    # them visible: they are what makes a "low" verdict explainable to an
+    # auditor, and what stops anyone overriding it on a hunch.
+    for target, source_name in (
+        ("whisp_disturbance_after_2020", WHISP_INDICATOR_AFTER_2020),
+        ("whisp_disturbance_before_2020", WHISP_INDICATOR_BEFORE_2020),
+        ("whisp_treecover_2020", WHISP_INDICATOR_TREECOVER_2020),
+        ("whisp_commodity_2020", WHISP_INDICATOR_COMMODITIES_2020),
+    ):
+        found = _first_present(out, [source_name])
+        if found:
+            out[target] = _yes_no_to_bool(out[found])
+
+    # The other two commodity verdicts. Coffee is perennial, so risk_pcrop
+    # governs, but a disagreeing risk_acrop is a useful signal that the land
+    # use story is ambiguous. Surfaced, never used to override.
+    for target, source_name in (
+        ("whisp_risk_acrop", "risk_acrop"),
+        ("whisp_risk_timber", "risk_timber"),
+    ):
+        found = _first_present(out, [source_name])
+        if found:
+            out[target] = out[found].astype(str).str.strip().str.lower()
 
     # Post-cutoff loss: hectares -> percent of plot area.
     cols = WHISP_LOSS_COLUMNS if loss_columns is None else loss_columns

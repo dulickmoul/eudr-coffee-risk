@@ -46,6 +46,7 @@ DDS_PROPERTY_ORDER = [
     "risk_tier",
     "deforestation_flag",
     "whisp_risk",
+    "verdict_context",
     "dds_conclusion",
 ]
 
@@ -96,6 +97,11 @@ def build_dds(df, geometry_by_id, operator=None, harvest_year=None):
         whisp_risk = row.get("whisp_risk")
         if whisp_risk is not None and str(whisp_risk) != "nan":
             props["whisp_risk"] = str(whisp_risk)
+        # Why a verdict and the raw numbers appear to disagree. Kept in the
+        # record so a reviewer is never left guessing.
+        context = row.get("verdict_context")
+        if context:
+            props["verdict_context"] = str(context)
         ordered = {k: props[k] for k in DDS_PROPERTY_ORDER if k in props}
         features.append(
             {
@@ -176,6 +182,7 @@ def write_field_checklist(df, out_dir, tiers=("high", "standard")):
             "loss_pct",
             "radd_alert_ha",
             "in_protected_area",
+            "verdict_context",
             "dds_conclusion",
         ]
         if c in subset.columns

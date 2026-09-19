@@ -125,6 +125,29 @@ WHISP_MAX_CONCURRENT_JOBS = 2
 WHISP_RISK_COLUMN = "risk_pcrop"
 WHISP_RISK_COLUMNS_ALL = ["risk_pcrop", "risk_acrop", "risk_timber"]
 
+# Whisp's documented decision tree for perennial crops (FAO Whisp FAQs).
+# Read this before ever considering an override. It encodes forest-at-2020,
+# commodity-at-2020 and pre/post-cutoff disturbance, none of which raw loss
+# hectares can see:
+#
+#   low   if  no tree cover at end-2020
+#         or  a commodity dataset detects crop production at end-2020
+#         or  (pcrop only) disturbance BEFORE 2020, implying the plantation
+#             was established before the cutoff
+#   high  else if disturbance after 2020-12-31
+#   more_info_needed  otherwise (tree cover present, no commodity detected,
+#                     no disturbance on either side of the cutoff)
+#
+# Verified against 8 real frontier probes: the rule predicted all 8 verdicts.
+# The third path is why a plot can lose 44.8% of its area after 2020 and still
+# be low risk for coffee: it was already 98% cleared before the cutoff, so the
+# later clearing is replanting on converted land, not deforestation. That same
+# plot is risk_acrop=high, because the pre-cutoff path applies to perennials
+# only. Whisp's logic is sound; our own thresholds are not a substitute.
+WHISP_INDICATOR_TREECOVER_2020 = "Ind_01_treecover"
+WHISP_INDICATOR_COMMODITIES_2020 = "Ind_02_commodities"
+WHISP_INDICATOR_BEFORE_2020 = "Ind_03_disturbance_before_2020"
+
 # Whisp's own verdict vocabulary. Only "low" has been observed directly; the
 # other two are inferred from the three-colour breakdown in its UI. Anything
 # unrecognised maps to "standard" rather than "low", so a vocabulary change

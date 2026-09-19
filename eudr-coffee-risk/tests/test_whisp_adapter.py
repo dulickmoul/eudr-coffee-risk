@@ -353,47 +353,89 @@ def test_severity_helpers():
           scoring.most_severe("low", "weird"), "weird")
 
 
-def test_frontier_fixture():
-    """Both failure modes, pinned against real forest-frontier data.
+def predict_pcrop(row):
+    """Whisp's documented decision tree for perennial crops (FAO FAQs).
 
-    Deferring to Whisp's verdict alone under-flags; trusting our own
-    hectares alone over-flags. assign_tier must take the worse of the two.
+    Reimplemented here so the tests can prove we actually understand the
+    methodology we defer to. If Whisp changes its logic, this diverges and
+    the test fails loudly instead of us quietly mis-explaining results.
     """
+    if not bool(row["whisp_treecover_2020"]):
+        return "low"                      # no tree cover at end-2020
+    if bool(row["whisp_commodity_2020"]):
+        return "low"                      # commodity already mapped at end-2020
+    if bool(row["whisp_disturbance_before_2020"]):
+        return "low"                      # plantation predates the cutoff
+    if bool(row["whisp_disturbance_after_2020"]):
+        return "high"                     # post-cutoff clearing on 2020 forest
+    return "more_info_needed"
+
+
+def test_decision_tree_matches_whisp():
+    """The documented tree must reproduce Whisp's own verdicts, row for row."""
     if not os.path.exists(FRONTIER):
         print(f"SKIP  frontier fixture missing: {FRONTIER}")
-        return
+        return None
 
-    raw = pd.read_csv(FRONTIER)
-    scored = scoring.score_dataframe(whisp.to_risk_frame(raw))
+    mapped = whisp.to_risk_frame(pd.read_csv(FRONTIER))
+    needed = ["whisp_treecover_2020", "whisp_commodity_2020",
+              "whisp_disturbance_before_2020", "whisp_disturbance_after_2020"]
+    for col in needed:
+        check(f"indicator mapped: {col}", col in mapped.columns, True)
+
+    mismatches = []
+    for _, row in mapped.iterrows():
+        if predict_pcrop(row) != row["whisp_risk"]:
+            mismatches.append(
+                (row["plot_id"], predict_pcrop(row), row["whisp_risk"])
+            )
+    check(f"tree reproduces all {len(mapped)} verdicts", mismatches, [])
+    return mapped
+
+
+def test_frontier_fixture(mapped=None):
+    """Deference is correct, and anything surprising is explained not hidden.
+
+    An earlier version of assign_tier took the more severe of verdict and
+    evidence, which turned TADUNG-r7c3 into a false positive. These checks
+    pin the corrected behaviour.
+    """
+    if mapped is None:
+        if not os.path.exists(FRONTIER):
+            print(f"SKIP  frontier fixture missing: {FRONTIER}")
+            return
+        mapped = whisp.to_risk_frame(pd.read_csv(FRONTIER))
+
+    scored = scoring.score_dataframe(mapped)
     by_id = scored.set_index("plot_id")
 
-    # Under-flagging case: heavy clearing, radar alerts, Whisp's own Ind_04
-    # says yes, but risk_pcrop came back low.
+    # The plot that fooled an earlier version of this code: heavy post-2020
+    # clearing, but 98% of it was already cleared BEFORE the cutoff, so the
+    # correct coffee verdict is low.
     r7c3 = by_id.loc["TADUNG-r7c3"]
-    check("r7c3 verdict really is low", r7c3["whisp_risk"], "low")
-    check("r7c3 disturbance confirmed",
-          bool(r7c3["whisp_disturbance_after_2020"]), True)
-    check("r7c3 lost over 40% of the plot", round(r7c3["loss_pct"], 0) > 40, True)
-    check("r7c3 must NOT be low", r7c3["risk_tier"], "high")
+    check("r7c3 verdict is low", r7c3["whisp_risk"], "low")
+    check("r7c3 post-cutoff loss is real", round(r7c3["loss_pct"], 0) > 40, True)
+    check("r7c3 was disturbed before the cutoff too",
+          bool(r7c3["whisp_disturbance_before_2020"]), True)
+    check("r7c3 tier respects the verdict", r7c3["risk_tier"], "low")
+    check("r7c3 surprise is explained, not hidden",
+          "pre-cutoff establishment" in r7c3["verdict_context"], True)
+    check("r7c3 records the acrop disagreement",
+          "risk_acrop disagrees" in r7c3["verdict_context"], True)
 
-    # Whisp agreeing with us stays high.
-    check("verdict high stays high", by_id.loc["SONDIEN-r6c4"]["risk_tier"], "high")
+    # Genuine post-cutoff deforestation on land that was forest in 2020.
+    r6c4 = by_id.loc["SONDIEN-r6c4"]
+    check("r6c4 verdict is high", r6c4["whisp_risk"], "high")
+    check("r6c4 had no pre-cutoff disturbance",
+          bool(r6c4["whisp_disturbance_before_2020"]), False)
+    check("r6c4 tier is high", r6c4["risk_tier"], "high")
+    check("r6c4 needs no excuse", r6c4["verdict_context"], "")
 
-    # Over-flagging guard: real loss hectares, but Ind_04 says it was not
-    # post-cutoff forest disturbance, so it must not raise the tier.
+    # Loss present but not post-cutoff disturbance: stays low and scores zero.
     r7c5 = by_id.loc["TADUNG-r7c5"]
     check("r7c5 has loss on the books", r7c5["loss_ha"] > 0, True)
-    check("r7c5 disturbance not confirmed",
-          bool(r7c5["whisp_disturbance_after_2020"]), False)
     check("r7c5 stays low", r7c5["risk_tier"], "low")
     check("r7c5 score stays zero", r7c5["risk_score"], 0.0)
-
-    # And the counterfactual: blind deference loses the dangerous plot.
-    blind = whisp.to_risk_frame(raw).copy()
-    blind_tier = scoring.whisp_tier(
-        blind.set_index("plot_id").loc["TADUNG-r7c3", "whisp_risk"]
-    )
-    check("blind deference would have said low", blind_tier, "low")
 
 
 def test_tier_vocabulary():
@@ -434,8 +476,10 @@ def main():
     print("\n--- real Whisp response fixture ---")
     mapped = test_real_fixture()
     test_heuristic_would_over_flag(mapped)
-    print("\n--- forest frontier fixture (both failure modes) ---")
-    test_frontier_fixture()
+    print("\n--- Whisp decision tree reproduced ---")
+    frontier = test_decision_tree_matches_whisp()
+    print("\n--- forest frontier fixture (deference is correct) ---")
+    test_frontier_fixture(frontier)
 
     print("\n" + ("ALL PASS" if not FAILS else f"{len(FAILS)} FAILURES: {FAILS}"))
     return 1 if FAILS else 0
