@@ -37,6 +37,7 @@ _SUBMODULES = frozenset(
         "pipeline",
         "plots",
         "scoring",
+        "validation",
         "whisp",
     }
 )

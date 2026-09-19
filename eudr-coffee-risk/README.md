@@ -257,8 +257,11 @@ python tests/test_whisp_adapter.py
 ```bash
 python tests/test_legality_checklist.py
 ```
+```bash
+python tests/test_validation.py
+```
 
-223 checks, no network and no credentials:
+296 checks, no network and no credentials:
 
 - `test_scoring.py` (42) — tier rules, boolean coercion from `ee_to_df`,
   missing columns, empty input, the whole export bundle.
@@ -273,6 +276,9 @@ python tests/test_legality_checklist.py
 - `test_legality_checklist.py` (45) — the eight areas, CSV round trip,
   rejection of unknown statuses, the conjunctive roll-up, and that an
   unassessed plot never reads as ready.
+- `test_validation.py` (73) — reproduces the Olofsson (2014) worked example
+  from Tables 8 and 9, plus the sampling design, the guards, and an explicit
+  record of where the paper's printed figures and its own equations disagree.
 
 Run them before you touch `config.DEFAULT_WEIGHTS` or the tier thresholds.
 
@@ -330,6 +336,50 @@ vocabulary change in a future Whisp release fails safe.
 
 ---
 
+## Measuring accuracy, rather than asserting it
+
+Risk tiers are an opinion until someone measures them. `eudr_risk/validation.py`
+implements the standard protocol, Olofsson et al. (2014), *Good practices for
+estimating area and assessing accuracy of land change*: stratified random
+sampling with the tiers as strata, an error matrix in estimated **area
+proportions** rather than raw counts, and bias-corrected accuracy and area
+with 95% confidence intervals.
+
+```bash
+python scripts/run_validation.py sample --table out/run/risk_table.csv --out out/run/review.csv --target-se 0.02
+```
+
+A reviewer fills the `reference_class` column from a **better source than the
+map** — high-resolution imagery or a field visit — and then:
+
+```bash
+python scripts/run_validation.py estimate --table out/run/risk_table.csv --review out/run/review.csv
+```
+
+The number to read first is the **user's accuracy of the `high` tier**: the
+share of flagged plots that really warrant a visit, which is the false-alarm
+rate your field team absorbs. Producer's accuracy answers the other question,
+how much genuine clearing the screening missed.
+
+What this costs, at NKG scale: for 16,000 plots at the tier mix observed on
+the frontier sweep, Eq. (13) asks for **347 reviews** for a standard error of
+0.02 on overall accuracy. Roughly 2% of the portfolio characterises the whole
+of it. Proportional allocation alone would put about one review in the `high`
+tier, so a floor is applied and every `high` plot is reviewed.
+
+The implementation is checked against the paper's own worked example
+(Tables 8 and 9). User's accuracy, overall accuracy, all four producer's
+accuracy point estimates, all four area estimates to the hectare, all four
+area confidence intervals and the Eq. (13) sample size all reproduce. Two of
+the four printed producer's accuracy intervals do not; see
+`tests/test_validation.py` for the numbers and why we kept the published
+equation rather than tuning tolerances to match.
+
+Two things the estimator refuses to do, because both would flatter the
+result: compute a variance from a stratum with fewer than two samples, and
+report producer's accuracy for a class the reference data never found. Both
+come back as `None` with a warning instead of a comfortable number.
+
 ## Layout
 
 ```
@@ -340,6 +390,7 @@ eudr_risk/
   alerts.py     RADD radar alerts (near-real-time)             [backend B]
   legality.py   WDPA + hook for Vietnam forest zoning          [backend B]
   legality_checklist.py  the eight Article 2(40) areas, document-based
+  validation.py Olofsson (2014) accuracy and area estimation
   pipeline.py   Earth Engine zonal stats -> one row per plot   [backend B]
   whisp.py      Whisp API client + column adapter              [backend A]
   scoring.py    score, tier, draft conclusion (pandas, no EE)
@@ -350,6 +401,7 @@ notebooks/
 scripts/
   run_whisp.py        CLI, Whisp backend (no Earth Engine)
   run_pipeline.py     CLI, Earth Engine backend
+  run_validation.py   CLI, sample then estimate accuracy
 tests/                73 checks, no network or credentials
 data/plots_sample.geojson  synthetic demo plots
 ```
