@@ -137,18 +137,26 @@ pip install pandas
 python tests/test_scoring.py
 ```
 ```bash
+python tests/test_plots.py
+```
+```bash
 python tests/test_whisp_adapter.py
 ```
 
-73 checks total, no network and no credentials:
+119 checks, no network and no credentials:
 
-- `test_scoring.py` (40) — tier rules, boolean coercion from `ee_to_df`,
+- `test_scoring.py` (42) — tier rules, boolean coercion from `ee_to_df`,
   missing columns, empty input, the whole export bundle.
-- `test_whisp_adapter.py` (33) — response-envelope parsing, column mapping,
-  payload guards, and that the adapter **never fabricates** a `loss_pct` or
-  `radd_alert_ha` Whisp did not return.
+- `test_plots.py` (18) — id resolution, duplicate handling, geometry
+  validation, plus a pass over Whisp's real 50-feature example file if it is
+  present locally.
+- `test_whisp_adapter.py` (59) — response-envelope parsing, column mapping,
+  loss aggregation, payload guards, and an end-to-end run over
+  `tests/fixtures/whisp_result_sample.csv`, a **real 257-column Whisp
+  response**. Includes a negative control pinning the over-flagging bug
+  described under Risk tiers.
 
-Run both before you touch `config.DEFAULT_WEIGHTS` or the tier thresholds.
+Run them before you touch `config.DEFAULT_WEIGHTS` or the tier thresholds.
 
 ---
 
@@ -169,9 +177,28 @@ Rule-based and deliberately boring (see `scoring.assign_tier`):
 - **standard** — any post-cutoff loss or alert, or > 25% forest remaining within 1 km
 - **low** — no remote-sensing evidence of post-2020 deforestation
 
-`risk_score` (0–100) is a weighted sum used only to *order* the worklist.
-Weights live in `config.DEFAULT_WEIGHTS`. Change them if you like, but write
-down why: this feeds a compliance decision.
+**Whisp's own verdict overrides these rules whenever it is present**, because
+raw loss hectares are the wrong question. EUDR asks about loss on land that
+was *forest at the cutoff*; Whisp gates on exactly that, our arithmetic does
+not.
+
+A real case from the Di Linh sample makes the point. Plot DL-002 is a 5.05 ha
+coffee plot with 0.076 ha of GFC tree-cover loss after 2020, which is 1.51% of
+the plot, comfortably over the 0.5% "high" threshold. But `EUFO_2020`,
+`ForTy_forest_2020` and `GFT_primary` are all zero: that ground was already
+tree crop in 2020, not forest. Whisp returns `risk_pcrop = low` and
+`Ind_04_disturbance_after_2020 = no`, and it is right. Trusting our own
+threshold would have sent a field team to a compliant farm.
+
+The Earth Engine backend gets the same gating from `strict_jrc=True`, which
+intersects Hansen loss with the JRC 2020 forest baseline.
+
+`risk_score` (0–100) is a weighted sum used only to *order* the worklist
+within a tier. Weights live in `config.DEFAULT_WEIGHTS`. Change them if you
+like, but write down why: this feeds a compliance decision.
+
+Unrecognised Whisp verdicts map to **standard**, never **low**, so a
+vocabulary change in a future Whisp release fails safe.
 
 ---
 
@@ -210,7 +237,7 @@ statistics.
 | Tree-cover loss | `UMD/hansen/global_forest_change_2024_v1_12` | Annual; `lossyear` is years since 2000 |
 | NRT alerts | `projects/radar-wur/raddalert/v1` | Sentinel-1 radar, 10 m; filter `layer`/`geography` |
 | Protected areas | `WCMC/WDPA/current/polygons` | Legality proxy only |
-| Whisp API | `https://whisp.openforis.org/api` | Backend A. Many layers combined server-side; coffee risk column is `Risk_PCrop` |
+| Whisp API | `https://whisp.openforis.org/api` | Backend A. 257 columns from many layers combined server-side. Coffee verdict is `risk_pcrop` (lowercase), key indicator `Ind_04_disturbance_after_2020` |
 
 Asset versions move. `notebooks/phase2_risk.ipynb` Step 0 prints the live band
 names so you can catch a rename before it corrupts a run. RADD band naming in

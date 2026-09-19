@@ -102,14 +102,50 @@ WHISP_TIMEOUT_ASYNC_S = 600
 WHISP_MAX_BODY_KB = 10240
 WHISP_VERSION_SEEN = "3.0.0a17"
 
-# Whisp's own risk column depends on commodity. Coffee is a perennial crop,
-# so the relevant column is Risk_PCrop. Others: Risk_ACrop (annual crops),
-# Risk_Timber, Risk_Livestock (coming).
-WHISP_RISK_COLUMN = "Risk_PCrop"
+# Column names below were read off a real Whisp 3.0.0a17 response (257
+# columns) rather than guessed. See tests/fixtures/whisp_result_sample.csv.
+#
+# Whisp's risk column depends on commodity. Coffee is a perennial crop, so
+# coffee uses risk_pcrop. Note the lowercase: the web table displays
+# "RISK_PCROP" only because of CSS, the CSV header is lowercase.
+WHISP_RISK_COLUMN = "risk_pcrop"
+WHISP_RISK_COLUMNS_ALL = ["risk_pcrop", "risk_acrop", "risk_timber"]
 
-# Whisp returns dozens of columns and the set changes between versions.
-# Run `python scripts/run_whisp.py --list-columns` once against your own data,
-# then list here the post-2020 loss columns to sum into `loss_pct`.
-# Deliberately empty: guessing column names would silently produce wrong
-# risk numbers, which is worse than producing none.
-WHISP_LOSS_COLUMNS = []
+# Whisp's own verdict vocabulary. Only "low" has been observed directly; the
+# other two are inferred from the three-colour breakdown in its UI. Anything
+# unrecognised maps to "standard" rather than "low", so a vocabulary change
+# fails safe instead of silently clearing plots.
+WHISP_TIER_MAP = {
+    "low": "low",
+    "more_info_needed": "standard",
+    "moreinfoneeded": "standard",
+    "medium": "standard",
+    "standard": "standard",
+    "high": "high",
+}
+WHISP_TIER_FALLBACK = "standard"
+
+# Post-cutoff disturbance, in hectares, one column per source dataset.
+WHISP_LOSS_COLUMNS = [
+    "TMF_def_after_2020",
+    "TMF_deg_after_2020",
+    "GFC_loss_after_2020",
+    "GLAD-L_after_2020",
+    "GLAD-S2_after_2020",
+]
+
+# These datasets detect the same clearing events, so summing them
+# double-counts. Take the largest single estimate instead.
+WHISP_LOSS_AGGREGATION = "max"  # "max" or "sum"
+
+# Whisp reports RADD separately, which is the same measurement the Earth
+# Engine backend computes itself.
+WHISP_RADD_COLUMN = "RADD_after_2020"
+
+# Whisp's own yes/no indicator for post-cutoff disturbance. This is the one
+# that matters for EUDR, because Whisp gates it on whether the land was
+# forest at the cutoff, which raw loss hectares do not.
+WHISP_INDICATOR_AFTER_2020 = "Ind_04_disturbance_after_2020"
+
+# Coffee presence, useful for sanity-checking that a plot really is coffee.
+WHISP_COMMODITY_COLUMN = "Coffee_FDaP"

@@ -30,10 +30,14 @@ import time
 
 from .config import (
     WHISP_BASE_URL,
+    WHISP_COMMODITY_COLUMN,
     WHISP_GEOMETRY_LIMIT_ASYNC,
     WHISP_GEOMETRY_LIMIT_SYNC,
+    WHISP_INDICATOR_AFTER_2020,
+    WHISP_LOSS_AGGREGATION,
     WHISP_LOSS_COLUMNS,
     WHISP_MAX_BODY_KB,
+    WHISP_RADD_COLUMN,
     WHISP_RISK_COLUMN,
     WHISP_TIMEOUT_ASYNC_S,
 )
@@ -281,17 +285,28 @@ def _first_present(df, candidates):
     return None
 
 
-def to_risk_frame(df, risk_column=WHISP_RISK_COLUMN,
-                  loss_columns=None, area_unit_hint="ha"):
+def _numeric(df, column):
+    import pandas as pd
+
+    return pd.to_numeric(df[column], errors="coerce").fillna(0.0)
+
+
+def _yes_no_to_bool(series):
+    return series.map(lambda v: str(v).strip().lower() in {"yes", "true", "1"})
+
+
+def to_risk_frame(df, risk_column=WHISP_RISK_COLUMN, loss_columns=None,
+                  loss_aggregation=WHISP_LOSS_AGGREGATION, area_unit_hint="ha"):
     """Rename Whisp output into the schema :mod:`eudr_risk.scoring` expects.
 
-    Only fields we can identify with confidence are mapped. Everything else is
-    carried through untouched, so nothing is lost and nothing is invented.
+    Column names here were taken from a real Whisp 3.0.0a17 response, not
+    guessed. Everything Whisp sent is carried through untouched as well, so
+    nothing is lost.
 
-    ``loss_columns`` (defaults to ``config.WHISP_LOSS_COLUMNS``) is summed into
-    ``loss_pct``. It is empty by default on purpose: run
-    :func:`describe_columns` against your own results and name the post-2020
-    loss columns explicitly rather than letting the code guess.
+    Post-cutoff disturbance arrives as hectares, one column per source
+    dataset (TMF, GFC, GLAD-L, GLAD-S2). Those datasets detect the same
+    clearing events, so the default aggregation is ``max`` rather than
+    ``sum``: summing would double-count one clearing as several.
     """
     import pandas as pd
 
@@ -311,7 +326,7 @@ def to_risk_frame(df, risk_column=WHISP_RISK_COLUMN,
 
     # Whisp reports the unit alongside the area; only trust hectares.
     if "area_ha" in out.columns:
-        out["area_ha"] = pd.to_numeric(out["area_ha"], errors="coerce").fillna(0.0)
+        out["area_ha"] = _numeric(out, "area_ha")
         if "unit" in out.columns:
             units = {str(u).strip().lower() for u in out["unit"].dropna().unique()}
             unexpected = units - {area_unit_hint, "ha", "hectare", "hectares", ""}
@@ -323,22 +338,46 @@ def to_risk_frame(df, risk_column=WHISP_RISK_COLUMN,
     else:
         out["area_ha"] = 0.0
 
-    # Whisp's own EUDR-oriented verdict, kept verbatim. This is the
-    # authoritative signal; our risk_score only orders the worklist.
+    # Whisp's own EUDR verdict, verbatim. Authoritative: it gates on whether
+    # the land was forest at the cutoff, which raw loss hectares do not.
     source_risk = _first_present(out, [risk_column])
-    out["whisp_risk"] = out[source_risk] if source_risk else None
+    if source_risk:
+        out["whisp_risk"] = out[source_risk].astype(str).str.strip().str.lower()
+    else:
+        print(
+            f"WARNING: no '{risk_column}' column in the Whisp response. "
+            "Falling back to our own heuristic tiers; check describe_columns()."
+        )
+        out["whisp_risk"] = None
 
+    # Whisp's yes/no post-cutoff disturbance indicator.
+    source_ind = _first_present(out, [WHISP_INDICATOR_AFTER_2020])
+    if source_ind:
+        out["whisp_disturbance_after_2020"] = _yes_no_to_bool(out[source_ind])
+
+    # Post-cutoff loss: hectares -> percent of plot area.
     cols = WHISP_LOSS_COLUMNS if loss_columns is None else loss_columns
     present = [c for c in cols if c in out.columns]
     if present:
-        loss = sum(pd.to_numeric(out[c], errors="coerce").fillna(0.0) for c in present)
-        out["loss_pct"] = loss
+        stacked = pd.concat([_numeric(out, c) for c in present], axis=1)
+        loss_ha = stacked.max(axis=1) if loss_aggregation == "max" else stacked.sum(axis=1)
+        out["loss_ha"] = loss_ha
+        area = out["area_ha"].where(out["area_ha"] > 0)
+        out["loss_pct"] = (loss_ha / area * 100).fillna(0.0)
     elif cols:
         print(
             f"WARNING: none of the configured loss columns {list(cols)} are "
             "present. loss_pct left at 0; check describe_columns()."
         )
 
-    # Signals that only the Earth Engine backend produces. Left absent so
-    # scoring defaults them rather than implying a measurement we never made.
+    # RADD is the same measurement the Earth Engine backend computes itself.
+    source_radd = _first_present(out, [WHISP_RADD_COLUMN])
+    if source_radd:
+        out["radd_alert_ha"] = _numeric(out, source_radd)
+
+    # Mapped commodity area, for sanity-checking that a plot really is coffee.
+    source_crop = _first_present(out, [WHISP_COMMODITY_COLUMN])
+    if source_crop:
+        out["coffee_ha"] = _numeric(out, source_crop)
+
     return out
