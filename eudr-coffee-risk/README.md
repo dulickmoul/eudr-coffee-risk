@@ -1,5 +1,9 @@
 # EUDR Coffee Risk Analytics
 
+**Deforestation-risk screening and a legality tracker. Not an EUDR compliance
+tool.** That distinction is the point of the next section, and calling it
+anything grander would misrepresent what satellites can do.
+
 Plot boundaries in, per-plot deforestation risk and a due-diligence bundle out.
 
 Built for robusta smallholders around **Di Linh, Lâm Đồng** (Vietnam's largest
@@ -13,6 +17,63 @@ the team visits the handful that actually need checking.
 **Cost: $0.** Every dataset is an open Earth Engine asset.
 
 ---
+
+## Scope: EUDR has two halves, and satellites answer one
+
+EUDR requires products to be deforestation-free **and produced legally**.
+Article 2(40) defines "relevant legislation" as the producing country's law
+across eight areas. Remote sensing cannot see most of them.
+
+| Article 2(40) area | Answerable from imagery? |
+|---|---|
+| (a) land use rights | No. Needs the land certificate or allocation contract |
+| (b) environmental protection | Partly. The pesticide log is the evidence |
+| (c) forest-related rules | Partly. WDPA is a proxy; the 3-loại-rừng zoning is the authority |
+| (d) third parties' rights | No |
+| (e) labour rights | No |
+| (f) human rights under international law | No |
+| (g) free, prior and informed consent (FPIC) | No |
+| (h) tax, anti-corruption, trade and customs | No |
+
+So this repo does two separate jobs, and keeps them visibly separate:
+
+1. **Deforestation screening** from satellite evidence, which ranks plots for
+   field verification.
+2. **A legality checklist** over the eight areas, filled from paper records
+   by a person, which tracks the other half.
+
+A plot is reported `eudr_readiness = ready` only when **both** halves pass. A
+plot with no checklist reads `not_started`, never `ready`: an unassessed plot
+is not a compliant plot.
+
+Scale of the legality problem in Vietnam, for calibration: roughly 2.25
+million smallholders sit in the wood, coffee and rubber chains, and most
+either lack a land use right certificate or hold incomplete paperwork, on
+paper. Digitising that is most of the work, and none of it is remote sensing.
+
+### The legality checklist
+
+```bash
+python scripts/run_whisp.py --plots data/plots.geojson --out out/run --legality-checklist out/run/legality.csv
+```
+
+If the file does not exist it is created blank, one row per plot per area,
+with the Vietnamese documents commonly used for each (`Giấy chứng nhận quyền
+sử dụng đất`, `Hợp đồng giao khoán`, pesticide log, labour agreements,
+consultation minutes). A compliance officer fills the `status`,
+`evidence_ref`, `checked_date` and `checked_by` columns in Excel; the next run
+reads it back and rolls it up.
+
+Statuses are `not_started`, `evidence_pending`, `on_file`, `verified`,
+`non_compliant`, `not_applicable`. Legality is **conjunctive**: one
+`non_compliant` area blocks the plot, and there is no averaging. `g_fpic` is a
+live question here rather than a formality, since K'Ho, Mạ and Ê Đê households
+farm coffee around Di Linh; mark it `not_applicable` only with a stated
+reason.
+
+Legal frame the evidence hints refer to: Luật Đất đai 2024, Luật Lâm nghiệp
+2017, Bộ luật Lao động 2019. **Not legal advice** — the buyer's legal team or
+the competent authority decides what satisfies each area.
 
 ## What EUDR requires (and what this does about it)
 
@@ -193,19 +254,25 @@ python tests/test_plots.py
 ```bash
 python tests/test_whisp_adapter.py
 ```
+```bash
+python tests/test_legality_checklist.py
+```
 
-119 checks, no network and no credentials:
+223 checks, no network and no credentials:
 
 - `test_scoring.py` (42) — tier rules, boolean coercion from `ee_to_df`,
   missing columns, empty input, the whole export bundle.
 - `test_plots.py` (18) — id resolution, duplicate handling, geometry
   validation, plus a pass over Whisp's real 50-feature example file if it is
   present locally.
-- `test_whisp_adapter.py` (59) — response-envelope parsing, column mapping,
-  loss aggregation, payload guards, and an end-to-end run over
-  `tests/fixtures/whisp_result_sample.csv`, a **real 257-column Whisp
-  response**. Includes a negative control pinning the over-flagging bug
-  described under Risk tiers.
+- `test_whisp_adapter.py` (118) — response-envelope parsing, column mapping,
+  loss aggregation, the sync/async ceiling, payload guards, and end-to-end
+  runs over **real Whisp responses** in `tests/fixtures/`. Reimplements
+  Whisp's documented decision tree and asserts it reproduces the service's
+  own verdicts row for row, so a change in its logic fails loudly here.
+- `test_legality_checklist.py` (45) — the eight areas, CSV round trip,
+  rejection of unknown statuses, the conjunctive roll-up, and that an
+  unassessed plot never reads as ready.
 
 Run them before you touch `config.DEFAULT_WEIGHTS` or the tier thresholds.
 
@@ -272,6 +339,7 @@ eudr_risk/
   forest.py     JRC 2020 baseline, Hansen post-cutoff loss     [backend B]
   alerts.py     RADD radar alerts (near-real-time)             [backend B]
   legality.py   WDPA + hook for Vietnam forest zoning          [backend B]
+  legality_checklist.py  the eight Article 2(40) areas, document-based
   pipeline.py   Earth Engine zonal stats -> one row per plot   [backend B]
   whisp.py      Whisp API client + column adapter              [backend A]
   scoring.py    score, tier, draft conclusion (pandas, no EE)
@@ -315,7 +383,15 @@ This is **decision-support tooling**, not a compliance determination.
   on the EU market files the official DDS through the EU Information System
   (TRACES). `dds.geojson` is the evidence you hand to whoever does that.
 - Satellite evidence cannot establish legal land tenure. A clean plot here can
-  still be non-compliant on legality grounds.
+  still be non-compliant on legality grounds, which is why
+  `eudr_readiness` requires the checklist as well.
+- Vietnam is benchmarked **low risk**, so operators get simplified due
+  diligence and are not required to perform Article 10 risk assessment or
+  Article 11 mitigation — *unless* they obtain information indicating a risk
+  of non-compliance. Output from this tool is exactly such information: a
+  `high` plot can therefore **trigger** full due diligence obligations for
+  your buyer. That is a reason to get the screening right, and to tell them
+  what a flag does and does not mean.
 - "No remote-sensing evidence" is not the same as "negligible risk". A human
   closes that out, with the farm visit and the land documents.
 - Do not commit real farmer plot boundaries: they are personal data. The

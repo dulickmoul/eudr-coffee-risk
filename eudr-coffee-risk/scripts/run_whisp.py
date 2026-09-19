@@ -54,6 +54,14 @@ def parse_args(argv=None):
         "--audit-trail", action="store_true",
         help="Ask Whisp for the geometry audit trail column.",
     )
+    p.add_argument(
+        "--legality-checklist",
+        default=None,
+        help="CSV of the Article 2(40) legality checklist. Read and merged if "
+             "it exists; a blank one is written there if it does not. "
+             "Satellites cannot answer legality, so without this the run "
+             "covers only half of EUDR.",
+    )
     p.add_argument("--list-columns", action="store_true",
                    help="Print the raw Whisp column names and exit.")
     p.add_argument("--save-raw", action="store_true",
@@ -67,7 +75,9 @@ def parse_args(argv=None):
 
 def main(argv=None):
     args = parse_args(argv)
-    from eudr_risk import config, dds, plots, scoring, whisp
+    from eudr_risk import (
+        config, dds, legality_checklist, plots, scoring, whisp,
+    )
 
     if args.check:
         print("config:", json.dumps(whisp.get_config(), indent=2))
@@ -117,6 +127,36 @@ def main(argv=None):
         print("wrote", raw_path)
 
     table = scoring.score_dataframe(whisp.to_risk_frame(raw))
+
+    # The legality half. Deliberately loud when absent: a clean satellite
+    # result is not compliance.
+    if args.legality_checklist:
+        if os.path.exists(args.legality_checklist):
+            rows = legality_checklist.read_checklist(args.legality_checklist)
+            table = legality_checklist.merge_into(table, rows)
+            print(f"merged legality checklist from {args.legality_checklist}")
+        else:
+            legality_checklist.write_checklist(
+                table["plot_id"], args.legality_checklist
+            )
+            table = legality_checklist.merge_into(table, [])
+            print(
+                f"no checklist found, wrote a blank one to "
+                f"{args.legality_checklist}\n"
+                f"  {len(legality_checklist.AREAS)} legality areas x "
+                f"{len(table)} plots need filling in from paper records."
+            )
+        counts = table["legality_status"].value_counts().to_dict()
+        ready = table["eudr_readiness"].value_counts().to_dict()
+        print(f"legality status: {counts}")
+        print(f"EUDR readiness : {ready}")
+    else:
+        print(
+            "NOTE: no --legality-checklist given. This run covers "
+            "deforestation only, which is half of EUDR. Article 2(40) "
+            "legality is unassessed."
+        )
+
     summary = scoring.summarise(table)
 
     operator = None

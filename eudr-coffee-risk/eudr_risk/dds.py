@@ -48,6 +48,13 @@ DDS_PROPERTY_ORDER = [
     "whisp_risk",
     "verdict_context",
     "dds_conclusion",
+    # The legality half. An unassessed plot is not a compliant plot, so these
+    # appear in the record even when nobody has started the checklist.
+    "legality_status",
+    "legality_outstanding",
+    "legality_blocking",
+    "eudr_readiness",
+    "not_ready_reason",
 ]
 
 
@@ -102,6 +109,16 @@ def build_dds(df, geometry_by_id, operator=None, harvest_year=None):
         context = row.get("verdict_context")
         if context:
             props["verdict_context"] = str(context)
+
+        # Legality and combined readiness, when the checklist has been merged.
+        for key in ("legality_status", "legality_blocking", "eudr_readiness",
+                    "not_ready_reason"):
+            value = row.get(key)
+            if value is not None and str(value) not in ("nan", ""):
+                props[key] = str(value)
+        outstanding = row.get("legality_outstanding")
+        if outstanding is not None and str(outstanding) != "nan":
+            props["legality_outstanding"] = int(outstanding)
         ordered = {k: props[k] for k in DDS_PROPERTY_ORDER if k in props}
         features.append(
             {
@@ -183,6 +200,9 @@ def write_field_checklist(df, out_dir, tiers=("high", "standard")):
             "radd_alert_ha",
             "in_protected_area",
             "verdict_context",
+            "legality_status",
+            "legality_outstanding",
+            "eudr_readiness",
             "dds_conclusion",
         ]
         if c in subset.columns
