@@ -1,0 +1,50 @@
+{
+  "type": "FeatureCollection",
+  "name": "plots_sample_di_linh",
+  "note": "Synthetic demo plots near Di Linh, Lam Dong. Replace with real boundaries exported from QGIS or GPS. DL-002 is intentionally just over 4 ha to exercise the EUDR polygon rule.",
+  "crs": { "type": "name", "properties": { "name": "urn:ogc:def:crs:OGC:1.3:CRS84" } },
+  "features": [
+    {
+      "type": "Feature",
+      "properties": { "plot_id": "DL-001", "commune": "Di Linh", "note": "~1.6 ha, point allowed" },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [[
+          [108.0700, 11.5800],
+          [108.0712, 11.5800],
+          [108.0712, 11.5811],
+          [108.0700, 11.5811],
+          [108.0700, 11.5800]
+        ]]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": { "plot_id": "DL-002", "commune": "Hoa Ninh", "note": "~5 ha, polygon required" },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [[
+          [108.0750, 11.5850],
+          [108.07706, 11.5850],
+          [108.07706, 11.58703],
+          [108.0750, 11.58703],
+          [108.0750, 11.5850]
+        ]]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": { "plot_id": "DL-003", "commune": "Gia Hiep", "note": "~2.5 ha, point allowed" },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [[
+          [108.0660, 11.5755],
+          [108.06747, 11.5755],
+          [108.06747, 11.57694],
+          [108.0660, 11.57694],
+          [108.0660, 11.5755]
+        ]]
+      }
+    }
+  ]
+}

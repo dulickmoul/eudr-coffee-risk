@@ -1,0 +1,7 @@
+# Core: Earth Engine client + notebook mapping + dataframes.
+earthengine-api>=1.1.0
+geemap>=0.32.0
+pandas>=2.0
+
+# Only needed if you read/convert local shapefiles or GeoPackages.
+# geopandas>=0.14

@@ -1,0 +1,31 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+env/
+
+# Notebooks
+.ipynb_checkpoints/
+
+# Pipeline outputs (regenerate with scripts/run_pipeline.py)
+out/
+*/out/
+
+# Credentials and secrets. Never commit Earth Engine or service-account keys.
+.env
+*.pem
+*-credentials.json
+service-account*.json
+.config/earthengine/
+
+# Real farmer plot boundaries and personal data: keep these out of git.
+# Commit only synthetic samples (data/plots_sample.geojson is allowed below).
+data/real/
+data/*_plots.geojson
+!data/plots_sample.geojson
+
+# OS noise
+.DS_Store
+Thumbs.db
