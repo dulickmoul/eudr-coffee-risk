@@ -126,6 +126,10 @@ Whisp's id in `whisp_plot_id` for traceability, and prints how many rows fell
 back. Upstream has had trouble honouring this (whisp issue #257), hence the
 per-row fallback rather than trust.
 
+Verified working against the live API on 2026-09-19: `DL-001`, `DL-002` and
+`DL-003` round-tripped intact into `external_id`, alongside Whisp's own
+`plotId` of `1`, `2`, `3`.
+
 Other `analysisOptions` the API accepts: `unitType` (we request `ha`),
 `nationalCodes`, `async`, `geometryAuditTrail` (adds the `geo_original`
 column). Build them with `whisp.build_analysis_options()`.

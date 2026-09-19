@@ -17,10 +17,15 @@ Endpoints, the ``x-api-key`` requirement and the limits were taken from the
 published OpenAPI spec at ``https://whisp.openforis.org/api/docs`` and from
 ``GET /api/config`` (Whisp 3.0.0a17, September 2026).
 
-**Not yet exercised against a live key.** The response envelope is handled
-defensively (see :func:`_extract_token` and :func:`_extract_rows`) and
-:func:`describe_columns` exists so you can inspect the real column set on your
-first run rather than trusting a guess.
+Verified against the live API on 2026-09-19 with the three Di Linh sample
+plots: the request body shape, the synchronous path and the
+``externalIdColumn`` round-trip all behave as the spec describes.
+
+Still spec-derived only: the asynchronous path (over 250 geometries), job
+polling and the CSV fallback. :func:`_extract_token` and :func:`_extract_rows`
+therefore stay defensive about the response envelope, and
+:func:`describe_columns` is there to inspect the real column set rather than
+trust a guess.
 """
 
 import io
