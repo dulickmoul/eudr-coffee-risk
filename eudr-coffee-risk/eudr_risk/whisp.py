@@ -29,6 +29,7 @@ import os
 import time
 
 from .config import (
+    EUDR_AREA_THRESHOLD_HA,
     WHISP_BASE_URL,
     WHISP_COMMODITY_COLUMN,
     WHISP_GEOMETRY_LIMIT_ASYNC,
@@ -337,6 +338,13 @@ def to_risk_frame(df, risk_column=WHISP_RISK_COLUMN, loss_columns=None,
                 )
     else:
         out["area_ha"] = 0.0
+
+    # The geolocation rule is ours to apply, not Whisp's: it reports area but
+    # says nothing about whether a polygon is legally required. Without this
+    # the Whisp path silently drops a core EUDR obligation.
+    out["eudr_geom"] = out["area_ha"].map(
+        lambda a: "point" if a <= EUDR_AREA_THRESHOLD_HA else "polygon"
+    )
 
     # Whisp's own EUDR verdict, verbatim. Authoritative: it gates on whether
     # the land was forest at the cutoff, which raw loss hectares do not.

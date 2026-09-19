@@ -208,6 +208,12 @@ def test_real_fixture():
     check("plot 2 disturbance indicator is no",
           bool(row2["whisp_disturbance_after_2020"]), False)
 
+    # The EUDR geolocation rule is ours to apply; Whisp reports area only.
+    geoms = dict(zip(mapped["plot_id"], mapped["eudr_geom"]))
+    check("5.05 ha needs a polygon", geoms["2"], "polygon")
+    check("1.59 ha may use a point", geoms["1"], "point")
+    check("2.55 ha may use a point", geoms["3"], "point")
+
     scored = scoring.score_dataframe(mapped)
     tiers = dict(zip(scored["plot_id"], scored["risk_tier"]))
     # The whole point: 1.51% loss is over our 0.5% "high" threshold, but the
@@ -215,7 +221,15 @@ def test_real_fixture():
     check("plot 2 tier defers to Whisp", tiers["2"], "low")
     check("all plots low", set(tiers.values()), {"low"})
     check("nothing flagged", int(scored["deforestation_flag"].sum()), 0)
-    check("summary all clean", scoring.summarise(scored)["pct_clean"], 100.0)
+
+    # Score must be gated like the tier, or the report says "low risk, 50".
+    scores = dict(zip(scored["plot_id"], scored["risk_score"]))
+    check("cleared plot scores zero, not 50", scores["2"], 0.0)
+    check("no plot scores above zero", float(scored["risk_score"].max()), 0.0)
+
+    summary = scoring.summarise(scored)
+    check("summary all clean", summary["pct_clean"], 100.0)
+    check("polygon requirement counted", summary["polygon_required"], 1)
     return mapped
 
 

@@ -123,6 +123,15 @@ def score_dataframe(df, weights=None):
     edge_comp = d["forest_frac_1km"].clip(0, 1)
     legal_comp = (d["in_protected_area"] | d["in_restricted_forest"]).astype(float)
 
+    # Gate the disturbance signals the same way the tier is gated. Otherwise a
+    # plot Whisp has cleared still scores high on loss hectares that are not
+    # EUDR-relevant, and the report reads "low risk, score 50", which invites
+    # exactly the misreading this tool exists to prevent.
+    if "whisp_disturbance_after_2020" in d.columns:
+        relevant = _as_bool(d["whisp_disturbance_after_2020"]).astype(float)
+        loss_comp = loss_comp * relevant
+        radd_comp = radd_comp * relevant
+
     d["risk_score"] = (
         100.0
         * (
