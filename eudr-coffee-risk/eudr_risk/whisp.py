@@ -195,6 +195,15 @@ def chunk_count(geojson, size=WHISP_GEOMETRY_LIMIT_ASYNC):
     return (len(features) + size - 1) // size
 
 
+def needs_async(count, sync_limit=WHISP_GEOMETRY_LIMIT_SYNC):
+    """Whether a batch of this size must be submitted asynchronously.
+
+    The sync ceiling is enforced: past it the service returns 400
+    validation_too_many_geometries unless analysisOptions.async is true.
+    """
+    return count > sync_limit
+
+
 def _extract_token(payload):
     for key in ("token", "jobId", "job_id", "id", "taskId"):
         value = payload.get(key)
@@ -242,9 +251,19 @@ def submit_geojson(geojson, api_key=None, analysis_options=None,
     # itself (additionalProperties: true) with analysisOptions alongside it,
     # not the collection nested under a "geojson" key.
     body = dict(geojson)
-    options = (
+    options = dict(
         build_analysis_options() if analysis_options is None else analysis_options
     )
+
+    # The 250-geometry ceiling applies to SYNCHRONOUS submission only. Above
+    # it the service rejects the request with validation_too_many_geometries
+    # unless analysisOptions.async is true, and then accepts up to 5,000.
+    # Verified live: 300 with async=true returns 202 and a token, 251 with
+    # async unset returns 400. Set it ourselves rather than making every
+    # caller remember.
+    if needs_async(count) and "async" not in options:
+        options["async"] = True
+
     if options:
         body["analysisOptions"] = options
 

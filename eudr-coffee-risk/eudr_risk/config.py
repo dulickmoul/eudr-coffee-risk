@@ -95,8 +95,13 @@ WATCH_FOREST_FRAC = 0.25
 # Limits below were read from GET https://whisp.openforis.org/api/config
 # (Whisp 3.0.0a17, September 2026). Re-check with whisp.get_config().
 WHISP_BASE_URL = "https://whisp.openforis.org/api"
+# The sync ceiling is enforced, not advisory: above 250 geometries the submit
+# endpoint returns 400 validation_too_many_geometries UNLESS
+# analysisOptions.async is true, and then it accepts up to 5,000. Verified
+# live: 300 with async=true -> 202 + token; 251 with async unset -> 400.
+# whisp.submit_geojson sets async automatically past the sync limit.
 WHISP_GEOMETRY_LIMIT_SYNC = 250    # at or below this, results come back inline
-WHISP_GEOMETRY_LIMIT_ASYNC = 5000  # hard ceiling for one job
+WHISP_GEOMETRY_LIMIT_ASYNC = 5000  # hard ceiling for one async job
 WHISP_TIMEOUT_SYNC_S = 60
 WHISP_TIMEOUT_ASYNC_S = 600
 WHISP_MAX_BODY_KB = 10240

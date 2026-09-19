@@ -293,6 +293,21 @@ def test_chunking():
         check("zero chunk size rejected", True, True)
 
 
+def test_needs_async():
+    """Past the sync ceiling the request must declare async or get a 400.
+
+    Verified live: 251 geometries with async unset is rejected with
+    validation_too_many_geometries; 300 with async=true returns 202 and a
+    token. submit_geojson sets the flag itself, so callers cannot trip over
+    a limit that /api/config describes only indirectly.
+    """
+    check("1 is sync", whisp.needs_async(1), False)
+    check("250 is still sync", whisp.needs_async(250), False)
+    check("251 needs async", whisp.needs_async(251), True)
+    check("900 needs async", whisp.needs_async(900), True)
+    check("custom limit honoured", whisp.needs_async(50, sync_limit=20), True)
+
+
 def test_analysis_options():
     """Field names must match the OpenAPI AnalysisOptionsInput exactly."""
     opts = whisp.build_analysis_options()
@@ -465,6 +480,8 @@ def main():
     test_missing_api_key()
     print("\n--- batching ---")
     test_chunking()
+    print("\n--- sync vs async ceiling ---")
+    test_needs_async()
     print("\n--- analysis options and identity ---")
     test_analysis_options()
     test_external_id_preferred()
