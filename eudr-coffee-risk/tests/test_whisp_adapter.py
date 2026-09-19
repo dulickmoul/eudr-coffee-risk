@@ -253,6 +253,40 @@ def test_heuristic_would_over_flag(mapped):
     check("with the verdict plot 2 is correctly low", with_verdict["2"], "low")
 
 
+def test_chunking():
+    """One job takes at most 5,000 geometries, so portfolios must be batched."""
+    def collection(n):
+        return {"type": "FeatureCollection", "name": "big",
+                "features": [{"id": i} for i in range(n)]}
+
+    batches = list(whisp.chunk_geojson(collection(12), size=5))
+    check("12 features into 5s gives 3 batches", len(batches), 3)
+    check("batch sizes", [len(b["features"]) for _, b in batches], [5, 5, 2])
+    check("batches numbered from 1", [n for n, _ in batches], [1, 2, 3])
+    check("no feature lost",
+          sum(len(b["features"]) for _, b in batches), 12)
+    check("foreign members preserved", batches[0][1]["name"], "big")
+    check("type preserved", batches[0][1]["type"], "FeatureCollection")
+
+    check("exact multiple", len(list(whisp.chunk_geojson(collection(10), size=5))), 2)
+    check("single batch under size",
+          len(list(whisp.chunk_geojson(collection(3), size=5))), 1)
+
+    # The real case: 16,000 farms at the 5,000 ceiling.
+    check("16,000 farms needs 4 jobs", whisp.chunk_count(collection(16000)), 4)
+
+    try:
+        list(whisp.chunk_geojson(collection(0), size=5))
+        check("empty rejected", False, True)
+    except whisp.WhispError:
+        check("empty rejected", True, True)
+    try:
+        list(whisp.chunk_geojson(collection(3), size=0))
+        check("zero chunk size rejected", False, True)
+    except whisp.WhispError:
+        check("zero chunk size rejected", True, True)
+
+
 def test_analysis_options():
     """Field names must match the OpenAPI AnalysisOptionsInput exactly."""
     opts = whisp.build_analysis_options()
@@ -328,6 +362,8 @@ def main():
     print("\n--- guards ---")
     test_payload_guards()
     test_missing_api_key()
+    print("\n--- batching ---")
+    test_chunking()
     print("\n--- analysis options and identity ---")
     test_analysis_options()
     test_external_id_preferred()

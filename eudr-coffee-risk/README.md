@@ -59,7 +59,16 @@ it needs a registered GEE project too. Only the hosted API avoids that.
 
 ### A. Whisp quickstart
 
-Get a key from <https://whisp.openforis.org>, then:
+Get a key: register or sign in at <https://whisp.openforis.org/login>, open
+your account page and generate one. It is free. If you sign in through SSO,
+note that the Keycloak access token is **not** accepted by the API, you need
+the generated key.
+
+Licensing is worth comparing: Whisp is MIT and explicitly permits commercial
+use, where Earth Engine's free tier is noncommercial only. At scale the shared
+public API's rate limits still apply, so coordinate with FAO or self-host.
+
+Then:
 
 ```bash
 pip install pandas requests
@@ -85,7 +94,20 @@ python scripts/run_whisp.py --plots data/plots_sample.geojson --out out/whisp
 ```
 
 Service limits (Whisp 3.0.0a17): 250 geometries return inline, up to 5,000 per
-job, request body up to 10 MB.
+job, request body up to 10 MB, 30 requests per 60 seconds per key, and at most
+2 concurrent jobs.
+
+Any real portfolio therefore has to be batched. A 16,000-farm book is four
+jobs:
+
+```python
+from eudr_risk import whisp
+for number, batch in whisp.chunk_geojson(geojson):
+    ...  # submit each, then concatenate the tables and score once
+```
+
+Score the concatenated table rather than each batch, so tiers and the summary
+describe the whole portfolio.
 
 #### Keeping your own plot ids
 

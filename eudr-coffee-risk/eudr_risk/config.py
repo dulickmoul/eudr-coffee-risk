@@ -102,6 +102,20 @@ WHISP_TIMEOUT_ASYNC_S = 600
 WHISP_MAX_BODY_KB = 10240
 WHISP_VERSION_SEEN = "3.0.0a17"
 
+# Published rate limits, per API key. Defaults, and FAO notes they may change.
+WHISP_RATE_LIMIT_REQUESTS = 30
+WHISP_RATE_LIMIT_WINDOW_S = 60
+WHISP_MAX_CONCURRENT_JOBS = 2
+
+# Get a key by registering at https://whisp.openforis.org/login and generating
+# one on your account page. Free. Note that an SSO (Keycloak) access token is
+# NOT accepted by the API: you need the generated key.
+#
+# Licensing contrast worth remembering: Whisp is MIT and explicitly permits
+# commercial use, unlike Earth Engine's noncommercial tier. At a 16,000-farm
+# scale the shared public API's rate limits still apply, so either coordinate
+# with FAO or self-host, which the licence allows.
+
 # Column names below were read off a real Whisp 3.0.0a17 response (257
 # columns) rather than guessed. See tests/fixtures/whisp_result_sample.csv.
 #

@@ -160,6 +160,33 @@ def _check_payload(geojson):
     return count
 
 
+def chunk_geojson(geojson, size=WHISP_GEOMETRY_LIMIT_ASYNC):
+    """Split a FeatureCollection into submittable batches.
+
+    One job accepts at most 5,000 geometries, so any real portfolio has to be
+    batched: 16,000 farms is four jobs. Concatenate the resulting tables and
+    score once, so tiers and the summary cover the whole portfolio.
+
+    Yields ``(index, FeatureCollection)`` starting at 1.
+    """
+    if size < 1:
+        raise WhispError("Chunk size must be at least 1.")
+    features = geojson.get("features") or []
+    if not features:
+        raise WhispError("GeoJSON has no features.")
+
+    template = {k: v for k, v in geojson.items() if k != "features"}
+    for number, start in enumerate(range(0, len(features), size), start=1):
+        batch = dict(template)
+        batch["features"] = features[start:start + size]
+        yield number, batch
+
+
+def chunk_count(geojson, size=WHISP_GEOMETRY_LIMIT_ASYNC):
+    features = geojson.get("features") or []
+    return (len(features) + size - 1) // size
+
+
 def _extract_token(payload):
     for key in ("token", "jobId", "job_id", "id", "taskId"):
         value = payload.get(key)
