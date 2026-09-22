@@ -10,9 +10,12 @@ date is when Esri published the mosaic, not when the pixel was acquired. The
 figure therefore says "release" and never "photographed on". For a date-certain
 comparison use Sentinel-2 in the Copernicus Browser with explicit dates.
 
-Locations stay anonymous. A high verdict is a screening signal from a tool
-whose accuracy has not been measured, so naming the place would imply an
-accusation the evidence does not support.
+The two cells are machine-generated probe squares on a regular lattice, not
+anyone's parcel, and the alerts underneath them are open data that anyone can
+check on Global Forest Watch. So the figure says what they are rather than
+claiming an anonymity the committed coordinates would not honour. A high
+verdict remains a screening signal from a tool whose accuracy has not been
+measured against ground truth, never a finding of illegality.
 
     python scripts/make_satellite_compare.py
 """
@@ -50,6 +53,13 @@ PLOTS = [
 ]
 
 GREEN, RED, DARK, GREY = (46, 125, 50), (198, 40, 40), (20, 58, 30), (96, 115, 125)
+
+FOOTER = (
+    "Nguồn ảnh: Esri World Imagery Wayback. Ngày ghi là ngày phát hành bản đồ, "
+    "không phải ngày chụp ảnh. Phán quyết sàng lọc, chưa phải kết luận pháp lý.",
+    "Ô vàng là ô lưới do máy sinh, không phải ranh vườn của hộ nào. "
+    "Cảnh báo gốc là dữ liệu mở, ai cũng kiểm tra được trên Global Forest Watch.",
+)
 
 
 def deg2num(lat, lon, z):
@@ -177,7 +187,7 @@ def main():
     pad, gap = 20, 16
     head, rowhead, rownote, rowfoot = 104, 34, 26, 30
     W = pad * 2 + PANEL_PX * 2 + gap
-    H = head + len(rows) * (rowhead + rownote + PANEL_PX + rowfoot + 18) + 34
+    H = head + len(rows) * (rowhead + rownote + PANEL_PX + rowfoot + 18) + 60
     canvas = Image.new("RGB", (W, H), (255, 255, 255))
     d = ImageDraw.Draw(canvas)
 
@@ -204,11 +214,13 @@ def main():
                    font=font(20, True))
         y += PANEL_PX + rowfoot + 18
 
-    d.text((pad, H - 30),
-           "Nguồn ảnh: Esri World Imagery Wayback. Ngày ghi là ngày phát hành "
-           "bản đồ, không phải ngày chụp. Vị trí đã ẩn danh. "
-           "Phán quyết sàng lọc, chưa phải kết luận pháp lý.",
-           fill=GREY, font=font(15))
+    # Two lines, and measured: a footer that runs off the canvas silently
+    # deletes exactly the caveat it exists to carry.
+    small = font(15)
+    for i, line in enumerate(FOOTER):
+        if d.textlength(line, font=small) > W - 2 * pad:
+            raise RuntimeError("Footer line %d does not fit the canvas." % (i + 1))
+        d.text((pad, H - 52 + i * 21), line, fill=GREY, font=small)
 
     os.makedirs(OUT, exist_ok=True)
     path = os.path.join(OUT, "satellite_before_after.jpg")
