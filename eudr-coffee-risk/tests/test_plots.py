@@ -32,6 +32,8 @@ def check(label, got, want):
     print(f"{'PASS' if ok else 'FAIL'}  {label}: got={got!r} want={want!r}")
     if not ok:
         FAILS.append(label)
+        if "PYTEST_CURRENT_TEST" in os.environ:
+            raise AssertionError(f"{label}: got={got!r} want={want!r}")
 
 
 def write_tmp(obj):

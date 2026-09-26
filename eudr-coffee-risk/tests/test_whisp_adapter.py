@@ -39,6 +39,8 @@ def check(label, got, want):
     print(f"{'PASS' if ok else 'FAIL'}  {label}: got={got!r} want={want!r}")
     if not ok:
         FAILS.append(label)
+        if "PYTEST_CURRENT_TEST" in os.environ:
+            raise AssertionError(f"{label}: got={got!r} want={want!r}")
 
 
 def test_token_extraction():
@@ -128,7 +130,7 @@ def test_loss_aggregation():
     check("zero area gives 0 percent, not inf", list(safe["loss_pct"]), [0.0, 0.0])
 
 
-def test_end_to_end_into_scoring():
+def check_end_to_end_into_scoring():
     """The whole point: Whisp output must flow into the existing scorer."""
     mapped = whisp.to_risk_frame(whisp_like_frame())
     scored = scoring.score_dataframe(mapped)
@@ -144,7 +146,7 @@ def test_end_to_end_into_scoring():
     return scored
 
 
-def test_dds_carries_whisp_risk(scored):
+def check_dds_carries_whisp_risk(scored):
     from eudr_risk import dds
 
     geoms = {
@@ -187,7 +189,7 @@ def test_missing_api_key():
             os.environ["WHISP_API_KEY"] = saved
 
 
-def test_real_fixture():
+def check_real_fixture():
     """End to end over a real Whisp response."""
     if not os.path.exists(FIXTURE):
         print(f"SKIP  fixture missing: {FIXTURE}")
@@ -239,7 +241,7 @@ def test_real_fixture():
     return mapped
 
 
-def test_heuristic_would_over_flag(mapped):
+def check_heuristic_would_over_flag(mapped):
     """Negative control: without Whisp's verdict our heuristic over-flags.
 
     This is the bug the deference in assign_tier exists to prevent, pinned
@@ -259,7 +261,7 @@ def test_heuristic_would_over_flag(mapped):
     check("with the verdict plot 2 is correctly low", with_verdict["2"], "low")
 
 
-def test_chunking():
+def check_chunking():
     """One job takes at most 5,000 geometries, so portfolios must be batched."""
     def collection(n):
         return {"type": "FeatureCollection", "name": "big",
@@ -386,7 +388,7 @@ def predict_pcrop(row):
     return "more_info_needed"
 
 
-def test_decision_tree_matches_whisp():
+def check_decision_tree_matches_whisp():
     """The documented tree must reproduce Whisp's own verdicts, row for row."""
     if not os.path.exists(FRONTIER):
         print(f"SKIP  frontier fixture missing: {FRONTIER}")
@@ -408,7 +410,7 @@ def test_decision_tree_matches_whisp():
     return mapped
 
 
-def test_frontier_fixture(mapped=None):
+def check_frontier_fixture(mapped=None):
     """Deference is correct, and anything surprising is explained not hidden.
 
     An earlier version of assign_tier took the more severe of verdict and
@@ -473,13 +475,13 @@ def main():
     test_missing_plot_id()
     test_loss_aggregation()
     print("\n--- integration with scoring/dds ---")
-    scored = test_end_to_end_into_scoring()
-    test_dds_carries_whisp_risk(scored)
+    scored = check_end_to_end_into_scoring()
+    check_dds_carries_whisp_risk(scored)
     print("\n--- guards ---")
     test_payload_guards()
     test_missing_api_key()
     print("\n--- batching ---")
-    test_chunking()
+    check_chunking()
     print("\n--- sync vs async ceiling ---")
     test_needs_async()
     print("\n--- analysis options and identity ---")
@@ -491,12 +493,12 @@ def main():
     print("\n--- severity combination ---")
     test_severity_helpers()
     print("\n--- real Whisp response fixture ---")
-    mapped = test_real_fixture()
-    test_heuristic_would_over_flag(mapped)
+    mapped = check_real_fixture()
+    check_heuristic_would_over_flag(mapped)
     print("\n--- Whisp decision tree reproduced ---")
-    frontier = test_decision_tree_matches_whisp()
+    frontier = check_decision_tree_matches_whisp()
     print("\n--- forest frontier fixture (deference is correct) ---")
-    test_frontier_fixture(frontier)
+    check_frontier_fixture(frontier)
 
     print("\n" + ("ALL PASS" if not FAILS else f"{len(FAILS)} FAILURES: {FAILS}"))
     return 1 if FAILS else 0

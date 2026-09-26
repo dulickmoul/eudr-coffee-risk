@@ -261,7 +261,17 @@ python tests/test_legality_checklist.py
 python tests/test_validation.py
 ```
 
-296 checks, no network and no credentials:
+Either run each file directly, as above, or run the whole suite with pytest:
+
+```bash
+pip install pytest
+pytest
+```
+
+Both modes work and both are honest. As scripts each file prints one `PASS` or
+`FAIL` line per check and a summary, so you see every failure in one pass. Under
+pytest a failed check raises, so a green run means green. 296 checks across 42
+pytest test functions, no network and no credentials:
 
 - `test_scoring.py` (42) — tier rules, boolean coercion from `ee_to_df`,
   missing columns, empty input, the whole export bundle.

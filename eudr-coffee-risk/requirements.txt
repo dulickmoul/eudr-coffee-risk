@@ -11,3 +11,6 @@ geemap>=0.32.0
 
 # Only needed to read local shapefiles or GeoPackages.
 # geopandas>=0.14
+
+# optional, for `pytest` at the repo root; the test files also run as plain scripts
+pytest>=7

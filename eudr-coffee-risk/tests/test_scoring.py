@@ -29,6 +29,8 @@ def check(label, got, want):
     print(f"{'PASS' if ok else 'FAIL'}  {label}: got={got!r} want={want!r}")
     if not ok:
         FAILS.append(label)
+        if "PYTEST_CURRENT_TEST" in os.environ:
+            raise AssertionError(f"{label}: got={got!r} want={want!r}")
 
 
 def sample_frame():
@@ -62,7 +64,7 @@ def sample_frame():
     )
 
 
-def test_tiers(scored):
+def check_tiers(scored):
     tiers = dict(zip(scored["plot_id"], scored["risk_tier"]))
     check("A-clean -> low", tiers["A-clean"], "low")
     check("B small loss -> standard", tiers["B-smallloss"], "standard")
@@ -72,7 +74,7 @@ def test_tiers(scored):
     check("F fresh alerts -> high", tiers["F-alerts"], "high")
 
 
-def test_coercion(scored):
+def check_coercion(scored):
     check("missing column defaults False",
           bool(scored["in_restricted_forest"].any()), False)
     check("string 'true' coerced to True",
@@ -80,7 +82,7 @@ def test_coercion(scored):
                           "in_protected_area"].iloc[0]), True)
 
 
-def test_flags(scored):
+def check_flags(scored):
     flags = dict(zip(scored["plot_id"], scored["deforestation_flag"]))
     check("clean not flagged", bool(flags["A-clean"]), False)
     check("loss flagged", bool(flags["C-bigloss"]), True)
@@ -90,7 +92,7 @@ def test_flags(scored):
           bool(flags["D-protected"]), False)
 
 
-def test_score(scored):
+def check_score(scored):
     check("sorted by score desc",
           list(scored["risk_score"]) == sorted(scored["risk_score"], reverse=True),
           True)
@@ -107,7 +109,7 @@ def test_score(scored):
     check("country benchmark recorded", scored["country_eudr_risk"].iloc[0], "low")
 
 
-def test_summary(scored):
+def check_summary(scored):
     summary = scoring.summarise(scored)
     print(json.dumps(summary, indent=2))
     check("plot count", summary["plots"], 6)
@@ -124,7 +126,7 @@ def test_empty():
     check("empty summary survives", scoring.summarise(empty)["plots"], 0)
 
 
-def test_export(scored, summary):
+def check_export(scored, summary):
     geoms = {
         pid: {
             "type": "Polygon",
@@ -171,16 +173,16 @@ def test_export(scored, summary):
 def main():
     print("--- scoring ---")
     scored = scoring.score_dataframe(sample_frame())
-    test_tiers(scored)
-    test_coercion(scored)
-    test_flags(scored)
-    test_score(scored)
+    check_tiers(scored)
+    check_coercion(scored)
+    check_flags(scored)
+    check_score(scored)
     print("\n--- summary ---")
-    summary = test_summary(scored)
+    summary = check_summary(scored)
     print("\n--- edge cases ---")
     test_empty()
     print("\n--- export bundle ---")
-    test_export(scored, summary)
+    check_export(scored, summary)
 
     print("\n" + ("ALL PASS" if not FAILS else f"{len(FAILS)} FAILURES: {FAILS}"))
     return 1 if FAILS else 0
