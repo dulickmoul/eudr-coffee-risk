@@ -6,8 +6,8 @@ plane arithmetic. This script does the same job through GDAL, PROJ and QGIS
 instead, which matters for three reasons that only show up at scale:
 
 1. **It picks the projection per plot.** Vietnamese survey work is done in
-   VN-2000, whose UTM zones split at 108 degrees east. The Rsas plot sits at
-   108.07, so it is in zone 49N by about eight kilometres, and Lam Dong after
+   VN-2000, whose UTM zones split at 108 degrees east. The test plot sits a
+   few kilometres east of that line, so it is in zone 49N, and Lam Dong after
    the 2025 merger straddles the line. Measured rather than assumed: forcing
    this plot into the wrong zone moves its area by 0.02 percentage points,
    which is nothing. The zone matters for a different reason. Eastings from
@@ -32,7 +32,7 @@ personal data about a real household and never belongs in a commit.
 Run it with the QGIS Python, which already has GDAL, PROJ, pyproj and shapely:
 
     "C:\\Program Files\\QGIS 3.44.14\\bin\\python-qgis-ltr.bat" \\
-        scripts/qgis_plot_workflow.py data/real/Rsas_LamDong.gpx --id RSAS-01
+        scripts/qgis_plot_workflow.py data/real/plot.gpx --id PLOT-01
 
 The QGIS project is optional; pass --no-project to skip it and the script runs
 under any Python that has osgeo and pyproj.

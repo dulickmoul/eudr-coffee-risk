@@ -353,11 +353,11 @@ walk into a polygon, and they are deliberately independent of each other:
 
 ```bash
 # self-contained: plain Python, no GIS stack needed
-python scripts/gpx_to_geojson.py data/real/plot.gpx --id RSAS-01
+python scripts/gpx_to_geojson.py data/real/plot.gpx --id PLOT-01
 
 # through the standard stack: run it with the QGIS Python, which already
 # has GDAL, PROJ, pyproj and shapely. Writes a QGIS project and a sidecar.
-"C:/Program Files/QGIS 3.44.14/bin/python-qgis-ltr.bat" scripts/qgis_plot_workflow.py data/real/plot.gpx --id RSAS-01
+"C:/Program Files/QGIS 3.44.14/bin/python-qgis-ltr.bat" scripts/qgis_plot_workflow.py data/real/plot.gpx --id PLOT-01
 ```
 
 Running both on the same walk is the point. On the test plot they agree on area
@@ -396,7 +396,7 @@ The desk outputs assume a screen and a connection. A field package assumes
 neither:
 
 ```bash
-"C:/Program Files/QGIS 3.44.14/bin/python-qgis-ltr.bat" scripts/make_qfield_package.py data/real/qgis/RSAS-01.gpkg
+"C:/Program Files/QGIS 3.44.14/bin/python-qgis-ltr.bat" scripts/make_qfield_package.py data/real/qgis/PLOT-01.gpkg
 ```
 
 It writes a folder you copy to a phone whole and open in QField. Three things

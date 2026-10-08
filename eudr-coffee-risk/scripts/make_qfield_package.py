@@ -25,7 +25,7 @@ than free text for the category, and a photo field, because a photograph of the
 leaf settles arguments that a text box does not.
 
     "C:/Program Files/QGIS 3.44.14/bin/python-qgis-ltr.bat" \\
-        scripts/make_qfield_package.py data/real/qgis/RSAS-01.gpkg
+        scripts/make_qfield_package.py data/real/qgis/PLOT-01.gpkg
 
 Output goes to data/real/qfield/<PLOT_ID>/, which is gitignored along with
 everything else derived from a real household's boundary.
