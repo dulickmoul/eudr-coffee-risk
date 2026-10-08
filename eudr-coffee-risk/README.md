@@ -390,6 +390,35 @@ boundary without that cannot go in a due diligence file.
 Outputs land next to the source in a `qgis/` folder, which is gitignored: a
 walked boundary is personal data about a real household.
 
+### Taking it back to the field
+
+The desk outputs assume a screen and a connection. A field package assumes
+neither:
+
+```bash
+"C:/Program Files/QGIS 3.44.14/bin/python-qgis-ltr.bat" scripts/make_qfield_package.py data/real/qgis/RSAS-01.gpkg
+```
+
+It writes a folder you copy to a phone whole and open in QField. Three things
+decide whether such a folder is usable on a farm, and all three are easy to get
+wrong in a way that only shows up once you are standing in the garden:
+
+**The imagery is in the folder, not on a server.** A project pointing at a tile
+service renders a blank canvas with no signal, and it does it without raising
+anything. A GeoTIFF of the plot plus a buffer is cut once, up front. For the
+test plot that is 89 KB.
+
+**Paths are relative.** An absolute path resolves to nothing on Android. This
+is verified by copying the folder somewhere else entirely and reopening it, not
+by reading the XML, because the question is whether the layers resolve.
+
+**There is somewhere to put observations.** An empty point layer travels with
+the project, with a date defaulting to today, a dropdown instead of free text
+for the category, and a photo field. The boundary layers are set read only:
+they are evidence, not a sketch pad.
+
+The whole package for one plot is about 0.3 MB.
+
 ## Measuring accuracy, rather than asserting it
 
 Risk tiers are an opinion until someone measures them. `eudr_risk/validation.py`
@@ -458,6 +487,7 @@ scripts/
   run_validation.py   CLI, sample then estimate accuracy
   gpx_to_geojson.py   walked GPX -> polygon, self-contained arithmetic
   qgis_plot_workflow.py  the same through GDAL / PROJ / QGIS, with provenance
+  make_qfield_package.py offline field package for QField on a phone
 tests/                73 checks, no network or credentials
 data/plots_sample.geojson  synthetic demo plots
 ```
