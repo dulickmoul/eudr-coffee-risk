@@ -346,6 +346,50 @@ vocabulary change in a future Whisp release fails safe.
 
 ---
 
+## From a walked boundary to a filable plot
+
+Smallholders map plots by walking the edge with a phone. Two scripts turn that
+walk into a polygon, and they are deliberately independent of each other:
+
+```bash
+# self-contained: plain Python, no GIS stack needed
+python scripts/gpx_to_geojson.py data/real/plot.gpx --id RSAS-01
+
+# through the standard stack: run it with the QGIS Python, which already
+# has GDAL, PROJ, pyproj and shapely. Writes a QGIS project and a sidecar.
+"C:/Program Files/QGIS 3.44.14/bin/python-qgis-ltr.bat" scripts/qgis_plot_workflow.py data/real/plot.gpx --id RSAS-01
+```
+
+Running both on the same walk is the point. On the test plot they agree on area
+to four decimal places from completely different mathematics, one a local
+tangent plane and the other a geodesic on the ellipsoid. An area that only one
+method has ever produced has not been checked.
+
+`qgis_plot_workflow.py` adds three things that matter once there are thousands
+of plots rather than one:
+
+**It chooses the projection per plot.** VN-2000 splits into UTM zones at 108
+degrees east, and a province can straddle that line. Measured on the test plot,
+the wrong zone changes the area by 0.02 percentage points, which is nothing;
+what it breaks is comparability, because eastings from two zones cannot be
+overlaid. Every individual area stays plausible while every overlap, neighbour
+and distance query is silently wrong.
+
+**It will not let area alone approve a simplification.** A simplified ring has
+to keep its area within a budget *and* stay within the GPS noise of the
+original line, measured as a Hausdorff distance. Area is one number and it
+cancels: push one edge out and another in and the hectares are unchanged while
+the shape is wrong. On the test plot, an area-only rule accepted a four vertex
+ring whose boundary had moved 4.9 m.
+
+**It writes down how the number was made.** The sidecar JSON carries the CRS
+used, every area figure and the spread between them, the simplification
+budget, the GDAL and PROJ versions, and a SHA-256 of the source file. A
+boundary without that cannot go in a due diligence file.
+
+Outputs land next to the source in a `qgis/` folder, which is gitignored: a
+walked boundary is personal data about a real household.
+
 ## Measuring accuracy, rather than asserting it
 
 Risk tiers are an opinion until someone measures them. `eudr_risk/validation.py`
@@ -412,6 +456,8 @@ scripts/
   run_whisp.py        CLI, Whisp backend (no Earth Engine)
   run_pipeline.py     CLI, Earth Engine backend
   run_validation.py   CLI, sample then estimate accuracy
+  gpx_to_geojson.py   walked GPX -> polygon, self-contained arithmetic
+  qgis_plot_workflow.py  the same through GDAL / PROJ / QGIS, with provenance
 tests/                73 checks, no network or credentials
 data/plots_sample.geojson  synthetic demo plots
 ```
