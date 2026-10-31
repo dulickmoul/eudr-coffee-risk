@@ -270,8 +270,8 @@ pytest
 
 Both modes work and both are honest. As scripts each file prints one `PASS` or
 `FAIL` line per check and a summary, so you see every failure in one pass. Under
-pytest a failed check raises, so a green run means green. 296 checks across 42
-pytest test functions, no network and no credentials:
+pytest a failed check raises, so a green run means green. 342 checks across 56
+pytest test functions (346 with rasterio installed), no network and no credentials:
 
 - `test_scoring.py` (42) — tier rules, boolean coercion from `ee_to_df`,
   missing columns, empty input, the whole export bundle.
@@ -289,6 +289,11 @@ pytest test functions, no network and no credentials:
 - `test_validation.py` (73) — reproduces the Olofsson (2014) worked example
   from Tables 8 and 9, plus the sampling design, the guards, and an explicit
   record of where the paper's printed figures and its own equations disagree.
+- `test_probe_grid.py` (46, 50 with rasterio) — lattice snapping and stable
+  ids, boundaries with holes and shared province edges, the forest ring, the
+  Earth Engine download path against a stand-in module (tile orientation
+  included), pixel-to-cell aggregation when edges do not line up, and an
+  end-to-end script run.
 
 Run them before you touch `config.DEFAULT_WEIGHTS` or the tier thresholds.
 
@@ -419,6 +424,53 @@ they are evidence, not a sketch pad.
 
 The whole package for one plot is about 0.3 MB.
 
+## Screening a whole province
+
+With no farm boundaries, a province is screened with **probe cells**: squares
+on a fixed 0.002° lattice (about 220 m, 4.9 ha) that Whisp treats as plots.
+Most of a coffee province carried no forest at the end of 2020, and Whisp's
+perennial-crop rule returns `low` for land with no tree cover at the cutoff,
+so `scripts/make_probe_grid.py` keeps only the cells carrying JRC 2020 forest
+plus a one-cell ring around them, and prints what the Whisp run will cost
+before any quota is spent.
+
+```bash
+# Forest share from Earth Engine (one request per tile of the grid)
+python scripts/make_probe_grid.py --boundary data/real/lamdong_2025.geojson \
+    --forest ee --project my-gee-project --out out/probe/lamdong.geojson
+
+# Or from a local JRC GFC2020 GeoTIFF, no Earth Engine (pip install rasterio)
+python scripts/make_probe_grid.py --boundary data/real/lamdong_2025.geojson \
+    --forest JRC_GFC2020_V3_N20_E100.tif --dry-run
+
+python scripts/run_whisp.py --plots out/probe/lamdong.geojson --out out/probe/run
+```
+
+- **Boundary.** Lâm Đồng since 1 July 2025 is the former Lâm Đồng, Đắk Nông
+  and Bình Thuận combined, roughly 24,000 km². geoBoundaries and GADM still
+  publish the old provinces, so put all three in one file; features are
+  unioned, and shared edges between them are handled.
+- **Why the ring.** Whisp's tree-cover gate reads several datasets, not JRC
+  alone, so a cell with no JRC forest can still come back `high`. Those cells
+  sit next to JRC forest far more often than in settled farmland. `--ring 0`
+  drops the hedge; `--min-forest` moves the threshold (default 1% of a cell).
+- **Unknown is not clean.** Cells the forest source does not cover are kept,
+  never dropped.
+- **Stable ids.** The lattice is snapped to multiples of the cell size, so a
+  cell's `plot_id` (`LD-<row>-<col>`) depends only on where it is. Rerun with
+  a corrected boundary and surviving cells keep their ids.
+- **Cost.** Unfiltered, the new province is roughly 480,000 cells, about 96
+  Whisp jobs. The script prints the filtered count, jobs, waves at two
+  concurrent jobs and a worst-case time. The public API is shared: at this
+  scale, talk to FAO or self-host first.
+
+The Earth Engine download path is tested against a stand-in module, not yet
+against the live service. Check the first `--forest ee` run by eye in QGIS,
+probe cells over the JRC layer, before sending the result to Whisp.
+
+A province run is a **hotspot map** for routing field teams. Probe cells are
+nobody's parcel, and their verdicts are not per-farm EUDR findings.
+
 ## Measuring accuracy, rather than asserting it
 
 Risk tiers are an opinion until someone measures them. `eudr_risk/validation.py`
@@ -478,6 +530,7 @@ eudr_risk/
   whisp.py      Whisp API client + column adapter              [backend A]
   scoring.py    score, tier, draft conclusion (pandas, no EE)
   dds.py        CSV / DDS GeoJSON / summary / field checklist
+  probe_grid.py province lattice filtered to JRC 2020 forest (numpy)
 notebooks/
   phase1_mvp.ipynb    original MVP: Hansen loss on a map
   phase2_risk.ipynb   full Earth Engine pipeline + map + export
@@ -488,6 +541,7 @@ scripts/
   gpx_to_geojson.py   walked GPX -> polygon, self-contained arithmetic
   qgis_plot_workflow.py  the same through GDAL / PROJ / QGIS, with provenance
   make_qfield_package.py offline field package for QField on a phone
+  make_probe_grid.py  province-wide probe cells for a hotspot sweep
 tests/                73 checks, no network or credentials
 data/plots_sample.geojson  synthetic demo plots
 ```

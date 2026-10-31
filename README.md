@@ -106,7 +106,7 @@ python scripts/run_whisp.py --plots data/plots_sample.geojson --out out/run
 Tests need only `pandas`, no network and no credentials:
 
 ```bash
-for t in tests/test_*.py; do python "$t"; done   # 296 checks
+for t in tests/test_*.py; do python "$t"; done   # 342 checks
 ```
 
 Full documentation, including the scoring rules, the Whisp column reference and
